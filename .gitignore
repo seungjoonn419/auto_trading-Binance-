@@ -1,0 +1,11 @@
+.cache/pip
+.ssh
+.bash_history
+.bash_logout
+.bash_profile
+.bashrc
+.cshrc
+.git-credentials
+.gitconfig
+.tcshrc
+.viminfo
