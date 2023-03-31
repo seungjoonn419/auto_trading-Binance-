@@ -666,9 +666,7 @@ while True:
     print_status(portfolio, prices, targets, closes)
 
     # 매수
-    for i in range(1,11): 
-        holdings = set_holdings(tickers)
-        buy_volume(portfolio, prices, targets, holdings, budget_list, blackList, high_prices)
-        time.sleep(1)
+    holdings = set_holdings(tickers)
+    buy_volume(portfolio, prices, targets, holdings, budget_list, blackList, high_prices)
 
     time.sleep(INTERVAL)
