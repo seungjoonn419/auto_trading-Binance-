@@ -286,12 +286,8 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
 
         # 현재 보유하지 않은 상태 
         if holdings[coin] is False: 
+
             budget = budget_list[coin] 
-
-            # 레버리지를 포함한 주문 최소 금액 설정
-            if budget < 1:
-                budget = 1
-
             order_amount = budget/price
 
             if DEBUG is False:
