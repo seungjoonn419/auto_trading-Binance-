@@ -1,5 +1,3 @@
-import pyupbit
-import schedule
 import time
 import datetime
 import logging
@@ -7,6 +5,10 @@ import logging.handlers
 import requests
 import pandas as pd
 import json
+import ccxt
+import pprint
+from binance.client import Client
+
 
 INTERVAL = 1                                        # 매수 시도 interval (1초 기본)
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
@@ -39,11 +41,19 @@ logger.setLevel(level=logging.DEBUG)
 
 
 # Load account
-with open("upbit.txt") as f:
+with open("config.txt") as f:
     lines = f.readlines()
-    key = lines[0].strip()
-    secret = lines[1].strip()
-    upbit = pyupbit.Upbit(key, secret)
+    api_key = lines[0].strip()
+    secret  = lines[1].strip()
+    binance = ccxt.binance(config={
+        'apiKey': api_key,
+        'secret': secret,
+        'enableRateLimit': True,
+        'options': {
+            'defaultType': 'future'
+        }
+    })
+
 
 def make_sell_times(now):
     '''
@@ -118,15 +128,22 @@ def get_cur_prices(tickers):
     :return: 현재가, {'KRW-BTC': 7200000, 'KRW-XRP': 500, ...}
     '''
     try:
-        return pyupbit.get_current_price(tickers)
-    except:
+        cur_prices = {}
+        for ticker in tickers:
+            cur_price = binance.fetch_ticker(ticker)
+            cur_prices[ticker] = cur_price['last']
+
+        return cur_prices
+    except Exception as e:
+        logger.info('get_cur_prices() Exception occur')
+        logger.info(e)
         return None
 
 def inquiry_high_prices(tickers):
     try:
         high_prices = {}
         for ticker in tickers:
-            df = pyupbit.get_ohlcv(ticker, interval="day", count=10)
+            df = get_df(ticker)
             today = df.iloc[-1]
             today_high = today['high']
             high_prices[ticker] = today_high
@@ -135,6 +152,24 @@ def inquiry_high_prices(tickers):
     except:
         return  {ticker:0 for ticker in tickers}
 
+def get_df(ticker):
+    try:
+        btc = binance.fetch_ohlcv(
+            symbol=ticker, 
+            timeframe='1d', 
+            since=None, 
+            limit=10)
+
+        df = pd.DataFrame(btc, columns=['datetime', 'open', 'high', 'low', 'close', 'volume'])
+        df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
+        df.set_index('datetime', inplace=True)
+
+        return df
+    except Exception as e:
+        logger.error('get_df() Exception occur')
+        logger.error(e)
+        return Non
+
 def cal_target(ticker):
     '''
     각 코인에 대한 목표가 저장
@@ -142,18 +177,20 @@ def cal_target(ticker):
     :return: 목표가
     '''
     try:
-        df = pyupbit.get_ohlcv(ticker, interval="day", count=10)
+        df = get_df(ticker)
+
         yesterday = df.iloc[-2]
         today_open = yesterday['close']
         yesterday_high = yesterday['high']
         yesterday_low = yesterday['low']
         target = today_open + (yesterday_high - yesterday_low) * LARRY_K
+
         return today_open, target
     except Exception as e:
         logger.error('cal_target Exception occur')
         logger.error('ticker: %s', ticker)
         logger.error(e)
-        return 100000000000000000000000, 1000000000000000000000000
+        return 100000000000000000000, 100000000000000000000
 
 
 def set_targets(tickers):
@@ -176,10 +213,11 @@ def cal_volume(ticker):
     :return: 전일대비 거래량
     '''
     try:
-        df = pyupbit.get_ohlcv(ticker, interval="day", count=10)
+        df = get_df(ticker)
         yesterday = df.iloc[-2]
         yesterday_volume = yesterday['volume']
         yesterday_close = yesterday['close']
+
         return yesterday_volume * yesterday_close 
     except Exception as e:
         logger.error('cal_volume Exception occur')
@@ -208,7 +246,7 @@ def set_volumes(tickers):
     return volumes, total_volume, each_volume
 
 
-def get_portfolio(tickers, prices, targets, blackList):
+def get_portfolio(tickers, prices, targets):
     '''
     매수 조건 확인 및 매수 시도
     :param tickers: 코인 리스트
@@ -232,64 +270,80 @@ def get_portfolio(tickers, prices, targets, blackList):
         logger.error(e)
         return None
 
-def buy_volume(volume_list, prices, targets, holdings, budget_list, blackList, high_prices):
+def buy_volume(coin, prices, targets, holdings, budget_list):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
-        for ticker in volume_list:
-            #tick = ticker[0]
-            tick = ticker
-            high = high_prices[tick]
-            target = targets[tick]
-            price = prices[tick]
+        target = targets[coin]
+        price = prices[coin]
 
-            logger.info('-----buy_volume()-----')
-            logger.info('ticker')
-            logger.info(ticker)
-            logger.info('price')
-            logger.info(price)
-            logger.info('high')
-            logger.info(high)
-            logger.info('target')
-            logger.info(target)
+        logger.info('-----buy_volume()-----')
+        logger.info('ticker: %s', coin)
+        logger.info('price: %s', price)
+        logger.info('target: %s', target)
 
 
-            # 현재 보유하지 않은 상태 
-            if holdings[tick] is False: 
-                logger.info('Ticker')
-                logger.info(ticker)
-                fee = budget_list[tick] * 0.0005
+        # 현재 보유하지 않은 상태 
+        if holdings[coin] is False: 
+            budget = budget_list[coin] 
 
-                if DEBUG is False:
-                    ret = upbit.buy_market_order(tick, budget_list[tick] - fee)
-                    logger.info('----------buy_market_order ret-----------')
-                    logger.info(ret)
-                else:
-                    logger.info('BUY VOLUME')
-                    print("BUY API CALLED", tick)
+            # 레버리지를 포함한 주문 최소 금액 설정
+            if budget < 1:
+                budget = 1
 
-                time.sleep(INTERVAL)
+            order_amount = budget/price
+
+            if DEBUG is False:
+                # 레버리지 설정
+                market = binance.market(coin)
+                leverage = 5
+
+                resp = binance.fapiPrivate_post_leverage({
+                    'symbol': market['id'],
+                    'leverage': leverage
+                })
+
+                # 매수 주문
+                ret = binance.create_market_buy_order(
+                    symbol=coin,
+                    amount=order_amount
+                )
+                logger.info('----------buy_market_order ret-----------')
+                logger.info('Ticker: %s', coin)
+                logger.info(ret)
+            else:
+                logger.info('BUY VOLUME')
+                print("BUY API CALLED", coin)
+
+            #time.sleep(INTERVAL)
+        else:
+            logger.info('Already have: %s', coin)
     except Exception as e:
         logger.error('buy_volume Exception occur')
         logger.error(e)
 
 # 잔고 조회
 def get_balance_unit(tickers):
-    balances = upbit.get_balances()
-    units = {ticker:0 for ticker in tickers}
+    try:
+        balance = binance.fetch_balance()
+        positions = balance['info']['positions']
+        units = {ticker:0 for ticker in tickers}
 
-    for balance in balances:
-        if balance['currency'] == "KRW":
-            continue
+        for position in positions:
+            if float(position['positionAmt']) > 0:
+                logger.info('position: %s', position)
+                length = len(position['symbol']) - 4
+                unit = position['symbol'][:length] + "/USDT:USDT"
+                units[unit] = float(position['positionAmt'])
 
-        ticker = "KRW-" + balance['currency']        # XRP -> KRW-XRP
-        unit = float(balance['balance'])
-        units[ticker] = unit
-    return units
+        return units
+    except Exception as e:
+        logger.info('get_balance_unit() Exception occur')
+        logger.info(e)
 
 
-def sell_holdings(tickers, portfolio, prices, targets, blackList):
+def sell_holdings(tickers, portfolio, prices, targets):
     '''
     보유하고 있는 모든 코인에 대해 전량 매도
     :param tickers: 업비트에서 지원하는 암호화폐의 티커 목록
@@ -325,8 +379,6 @@ def sell_holdings(tickers, portfolio, prices, targets, blackList):
                     else:
                         print("SELL HOLDINGS API CALLED", ticker, buy_price, min_unit)
 
-                #blackList[ticker] = True
-
     except Exception as e:
         logger.error('sell_holdings Exception occur')
         logger.error(e)
@@ -348,32 +400,28 @@ def try_sell(tickers):
         logger.info(units)
 
         for ticker in tickers:
-            short_ticker = ticker.split('-')[1]
             unit = units.get(ticker, 0)                     # 보유 수량
 
-            logger.info('-----------ticker-----------')
-            logger.info(ticker)
-            logger.info('-----------try_sell unit---------')
-            logger.info(unit)
+            logger.info('ticker: ', ticker)
+            logger.info('try_sell unit: ', unit)
 
             if unit > 0:
-                orderbook = pyupbit.get_orderbook(ticker)['orderbook_units'][0]
-                logger.info('----------orderbook----------')
-                logger.info(orderbook)
-                buy_price = int(orderbook['bid_price'])                                 # 최우선 매수가
-                buy_unit = orderbook['bid_size']                                        # 최우선 매수수량
-                min_unit = min(unit, buy_unit)
-
                 if DEBUG is False:
-                    ret = upbit.sell_market_order(ticker, unit)
+                    ret = binance.create_market_sell_order(
+                        symbol=ticker,
+                        amount=unit
+                    )
+
                     logger.info('----------sell_market_order ret-----------')
                     logger.info(ret)
-                    time.sleep(INTERVAL)
+                    #time.sleep(INTERVAL)
 
                 else:
                     print("SELL API CALLED", ticker, buy_price, min_unit)
 
+        # 매도 이후에 잔고를 재조회하여 확인한다
         logger.info('try_sell after sell units')
+        units = get_balance_unit(tickers)
         logger.info(units)
 
     except Exception as e:
@@ -389,61 +437,6 @@ def sell(ticker, unit):
         pyupbit.sell_market_order(tick, unit)
     else:
         print("trailing stop", tick, buy_price, unit)
-
-def try_trailling_stop(volume_list, prices, closes, targets, high_prices, blackList):
-    '''
-    trailling stop
-    :param portfolio: 포트폴리오
-    :param prices: 현재가 리스트
-    :param closes: 전일 종가
-    :param targets: 목표가 리스트
-    :param high_prices: 각 코인에 대한 당일 최고가 리스트
-    :return:
-    '''
-    try:
-        # 잔고 조회
-        units = get_balance_unit(tickers)
-
-        for ticker in volume_list:
-            tick = ticker[0]
-            price = prices[tick]                          # 현재가
-            target = targets[tick]                        # 목표가
-            high_price = high_prices[tick]                # 당일 최고가
-            close = closes[tick]                          # 전일 종가
-            span_a = spans_a[tick]                        # 선행 스팬 1
-            span_b = spans_b[tick]                        # 선행 스팬 2
-            unit = units.get(tick, 0)                     # 보유 수량
-
-            gain = (price - target) / target                # 이익률
-            ascent = (price - close) / close                # 상승률
-            gap_from_high = 1 - (price/high_price)          # 고점과 현재가 사이의 갭
-
-            if unit > 0:
-                logger.info('TRY_TRAILLING_STOP() Ticker')
-                logger.info(tick)
-                if ticker[1] < 1 and gain * 100 >= 0.5:
-                    logger.info('Condition 1')
-                    sell(tick, unit)
-                    blackList[tick] = True
-
-                elif ticker[1] >= 1 and ticker[1] < 5 and gain * 100 >= 1 :
-                    logger.info('Condition 2')
-                    sell(tick, unit)
-                    blackList[tick] = True
-
-                elif ticker[1] >= 5 and ticker[1] < 10 and gain * 100 >= 1.5 :
-                    logger.info('Condition 2')
-                    sell(tick, unit)
-                    blackList[tick] = True
-
-                elif ticker[1] >= 10 and gain * 100 >= 10:
-                    logger.info('Condition 3')
-                    sell(tick, unit)
-                    blackList[tick] = True
-
-    except Exception as e:
-        logger.error('try trailing stop error')
-        logger.error(e)
 
 def set_budget():
     '''
@@ -482,16 +475,13 @@ def new_set_budget(tickers, each_volume):
     '''
     try:
         budget_list = {}
-        balances = upbit.get_balances()
-        krw_balance = 0
 
-        for balance in balances:
-            if balance['currency'] == 'KRW':
-                krw_balance = float(balance['balance'])
-        logger.info('krw_balance: %s', krw_balance)
+        balance = binance.fetch_balance(params={"type": "future"})
+        free_balance = balance['USDT']['free']
+        logger.info('free_balance: %s', free_balance)
 
         for ticker in tickers:
-            budget_list[ticker] = each_volume[ticker] * krw_balance
+            budget_list[ticker] = each_volume[ticker] * free_balance
 
         return budget_list
 
@@ -499,8 +489,6 @@ def new_set_budget(tickers, each_volume):
         logger.error('new_set_budget Exception occur')
         logger.error(e)
         return 0
-
-
 
 
 def set_holdings(tickers):
@@ -583,6 +571,22 @@ def reset_orderlist(orderList):
         logger.error('orderList reset Exception Occur')
         pass
 
+# USDT만 조회
+def get_tickers():
+    try:
+        markets = binance.load_markets()
+        tickers = list()
+        for sym in markets:
+            if sym[-5:] == ':USDT' and sym[:8] != 'BTC/USDT' and sym[:8] != 'ETH/USDT':
+                df = get_df(sym)
+                if df.iloc[-2]['volume'] > 0:
+                    tickers.append(sym)
+
+        return tickers
+    except Exception as e:
+        logger.error('get_tickers() Exception error')
+        logger.error(e)
+
 
 #----------------------------------------------------------------------------------------------------------------------
 # 매매 알고리즘 시작
@@ -593,16 +597,13 @@ setup_time1, setup_time2 = make_setup_times(now)                         # 초�
 portfolio_time1, portfolio_time2, portfolio_time3, portfolio_time4 = make_portfolio_today_times(now)
 volume_time = make_volume_times(now)                                     # 오후 거래량 시간 설정
 
-tickers = pyupbit.get_tickers(fiat="KRW")                                # 티커 리스트 얻기
-tickers.remove('KRW-BTT')
+tickers = get_tickers()
 COIN_NUM = len(tickers)
 closes, targets = set_targets(tickers)                                   # 코인별 목표가 계산
 
-volume_holdings = {ticker:False for ticker in tickers}                   # 전일 대비 거래량 기준 보유 상태 초기화
 high_prices = inquiry_high_prices(tickers)                               # 코인별 당일 고가 저장
-blackList = {ticker:False for ticker in tickers}                         # 한 번 익절한 코인
 
-volume_list = {}
+volume_list = {}                                                         # 전일 거래대금을 저장
 
 # upbit API의 호출 제한 때문에 2초간의 딜레이를 준다.
 time.sleep(2)
@@ -611,18 +612,17 @@ logger.info('volume_list: %s', volume_list)
 logger.info('total_volume: %f', total_volume)
 logger.info('each_volume: %s', each_volume)
 
-budget_list = new_set_budget(tickers, each_volume)                                # 코인별 최대 배팅 금액 계산
+budget_list = new_set_budget(tickers, each_volume)                       # 코인별 최대 배팅 금액 계산
 logger.info('budget_list: %s', budget_list)
 
 while True:
 
     now = datetime.datetime.now()
-    schedule.run_pending()                                               # 20분 마다 블랙리스트를 초기화
 
     # 새로운 거래일에 대한 데이터 셋업 (09:01:00 ~ 09:01:20)
     # 금일, 익일 포함
     if (sell_time1 < now < sell_time2) or (setup_time1 < now < setup_time2):
-        logger.info('새로운 거래일 데이터 셋업')
+        logger.info('New Date SetUp Start')
 
         # 시가에 매도
         try_sell(tickers)     
@@ -631,17 +631,13 @@ while True:
         volume_time = make_volume_times(now)                             # 오후 거래량 시간 설정
         portfolio_time1, portfolio_time2, portfolio_time3, portfolio_time4 = make_portfolio_today_times(now)
 
-        tickers = pyupbit.get_tickers(fiat="KRW")                        # 티커 리스트 얻기
-        tickers.remove('KRW-BTT')
+        tickers = get_tickers()                                          # 티커 리스트 얻기
         COIN_NUM = len(tickers)
         closes, targets = set_targets(tickers)                           # 목표가 갱신
 
         logger.info('Targets: %s', targets)
 
-        volume_holdings = {ticker:False for ticker in tickers}           # 전일 대비 거래량 기준 보유 상태 초기화
         high_prices = {ticker: 0 for ticker in tickers}                  # 코인별 당일 고가 초기화
-
-        blackList = {ticker:False for ticker in tickers}                 # 한 번 익절한 코인
 
         volume_list = {}                                                 # 전일 대비 거래량 순위
 
@@ -655,18 +651,20 @@ while True:
         budget_list = new_set_budget(tickers, each_volume)               # 코인별 최대 배팅 금액 계산
         logger.info('budget_list: %s', budget_list)
 
-        logger.info('새로운 거래일 데이터 셋업 마무리')
+        logger.info('New Date SetUp End')
         time.sleep(10)
 
     prices = get_cur_prices(tickers)                                     # 현재가 계산
     update_high_prices(tickers, high_prices, prices)                     # 고가 갱신
 
-    portfolio = get_portfolio(tickers, prices, targets, blackList)       
+    portfolio = get_portfolio(tickers, prices, targets)       
+    logger.info('Portfolio: %s', portfolio)
 
-    print_status(portfolio, prices, targets, closes)
+    #print_status(portfolio, prices, targets, closes)
 
     # 매수
     holdings = set_holdings(tickers)
-    buy_volume(portfolio, prices, targets, holdings, budget_list, blackList, high_prices)
+    for coin in portfolio:
+        buy_volume(coin, prices, targets, holdings, budget_list)
 
     time.sleep(INTERVAL)
