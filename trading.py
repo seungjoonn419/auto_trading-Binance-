@@ -58,8 +58,6 @@ with open("config.txt") as f:
 def make_sell_times(now):
     '''
     금일 09:01:00 시각과 09:01:10초를 만드는 함수
-    :param now: DateTime
-    :return:
     '''
     today = now
     sell_time = datetime.datetime(year=today.year,
@@ -75,8 +73,6 @@ def make_sell_times(now):
 def make_setup_times(now):
     '''
     익일 09:01:00 시각과 09:01:10초를 만드는 함수
-    :param now:
-    :return:
     '''
     tomorrow = now + datetime.timedelta(1)
     midnight = datetime.datetime(year=tomorrow.year,
@@ -208,9 +204,7 @@ def set_targets(tickers):
 
 def cal_volume(ticker):
     '''
-    각 코인에 대한 전일 거래량
-    :param ticker: 티커
-    :return: 전일대비 거래량
+    각 코인에 대한 전일 거래량 * 전일 종가 = 거래대금
     '''
     try:
         df = get_df(ticker)
@@ -226,9 +220,7 @@ def cal_volume(ticker):
 
 def set_volumes(tickers):
     '''
-    티커 코인들에 대한 전일 거래량
-    :param tickers: 코인에 대한 티커 리스트
-    :return:
+    티커 코인들에 대한 전일 거래대금
     '''
     volumes = {}
     each_volume = {}
@@ -288,9 +280,10 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
         if holdings[coin] is False: 
 
             budget = budget_list[coin] 
-            order_amount = budget/price
 
             if DEBUG is False:
+                market = binance.market(coin)
+
                 # 레버리지 설정
                 market = binance.market(coin)
                 leverage = 5
@@ -301,6 +294,8 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
                 })
 
                 # 매수 주문
+                order_amount = (budget/price) * leverage * 0.99
+
                 ret = binance.create_market_buy_order(
                     symbol=coin,
                     amount=order_amount
@@ -309,8 +304,7 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
                 logger.info('Ticker: %s', coin)
                 logger.info(ret)
             else:
-                logger.info('BUY VOLUME')
-                print("BUY API CALLED", coin)
+                logger.info('BUY API CALLED: %s', coin)
 
             #time.sleep(INTERVAL)
         else:
@@ -327,6 +321,7 @@ def get_balance_unit(tickers):
         units = {ticker:0 for ticker in tickers}
 
         for position in positions:
+
             if float(position['positionAmt']) > 0:
                 logger.info('position: %s', position)
                 length = len(position['symbol']) - 4
@@ -337,48 +332,6 @@ def get_balance_unit(tickers):
     except Exception as e:
         logger.info('get_balance_unit() Exception occur')
         logger.info(e)
-
-
-def sell_holdings(tickers, portfolio, prices, targets):
-    '''
-    보유하고 있는 모든 코인에 대해 전량 매도
-    :param tickers: 업비트에서 지원하는 암호화폐의 티커 목록
-    :return:
-    '''
-    try:
-        # 잔고조회
-        units = get_balance_unit(tickers)
-
-        for ticker in tickers:
-            unit = units.get(ticker, 0)                     # 보유 수량
-            price = prices[ticker]
-            target = targets[ticker]
-            gain = (price-target)/target
-
-            if unit > 0:
-                orderbook = pyupbit.get_orderbook(ticker)['orderbook_units'][0]
-                buy_price = int(orderbook['bid_price'])                                 # 최우선 매수가
-                buy_unit = orderbook['bid_size']                                        # 최우선 매수수량
-                min_unit = min(unit, buy_unit)
-
-                # 보유 중인 코인이 포트폴리오에 없으면 매도한다.
-                if ticker not in portfolio:
-                    if DEBUG is False:
-                        upbit.sell_market_order(ticker, unit)
-                    else:
-                        print("SELL HOLDINGS API CALLED", ticker, buy_price, min_unit)
-
-                # 손실이 -2%를 넘으면 매도한다.
-                if gain <= -0.02:
-                    if DEBUG is False:
-                        upbit.sell_market_order(ticker, unit)
-                    else:
-                        print("SELL HOLDINGS API CALLED", ticker, buy_price, min_unit)
-
-    except Exception as e:
-        logger.error('sell_holdings Exception occur')
-        logger.error(e)
-
 
 
 def try_sell(tickers):
@@ -423,45 +376,6 @@ def try_sell(tickers):
     except Exception as e:
         logger.error('try_sell Exception occur')
         logger.error(e)
-
-def sell(ticker, unit):
-    orderbook = pyupbit.get_orderbook(ticker)['orderbook_units'][0]
-    buy_price = int(orderbook['bid_price'])                                 # 최우선 매수가
-    buy_unit = orderbook['bid_size']                                        # 최우선 매수수량
-
-    if DEBUG is False:
-        pyupbit.sell_market_order(tick, unit)
-    else:
-        print("trailing stop", tick, buy_price, unit)
-
-def set_budget():
-    '''
-    한 코인에 대해 투자할 투자 금액 계산
-    :return: 원화잔고/투자 코인 수
-    '''
-    try:
-        balances = upbit.get_balances()
-        krw_balance = 0
-
-        #logger.info('balance: %s', balances)
-
-        for balance in balances:
-            if balance['currency'] == 'KRW':
-                krw_balance = float(balance['balance'])
-        logger.info('krw_balance: %s', krw_balance)
-
-        holding_count = len(balances) - 3
-        logger.info('holding_count: %d', holding_count)
-        logger.info('COIN_NUM: %d', COIN_NUM)
-
-        if COIN_NUM - holding_count > 0:
-            return int(krw_balance / (COIN_NUM - holding_count))
-        else:
-            return 0
-    except Exception as e:
-        logger.error('set_budget Exception occur')
-        logger.error(e)
-        return 0
 
 
 def new_set_budget(tickers, each_volume):
@@ -557,23 +471,22 @@ def print_status(portfolio, prices, targets, closes):
     except:
         pass
 
-def reset_orderlist(orderList):
-    try:
-        logger.info('orderlist reset() RUN')
-        logger.info(orderList)
-        for order in orderList:
-            orderList[order] = False
-    except:
-        logger.error('orderList reset Exception Occur')
-        pass
 
-# USDT만 조회
 def get_tickers():
+    '''
+    USDT만 조회
+    비트코인과 이더리움은 제외
+    '''
     try:
         markets = binance.load_markets()
         tickers = list()
         for sym in markets:
             if sym[-5:] == ':USDT' and sym[:8] != 'BTC/USDT' and sym[:8] != 'ETH/USDT':
+                # Set MarginType Isolated
+                length = len(sym) - 10
+                unit = sym[:length] + "USDT"
+                set_marginType(unit)
+
                 df = get_df(sym)
                 if df.iloc[-2]['volume'] > 0:
                     tickers.append(sym)
@@ -583,6 +496,16 @@ def get_tickers():
         logger.error('get_tickers() Exception error')
         logger.error(e)
 
+def set_marginType(ticker):
+    '''
+    마진을 Isolated로 설정
+    '''
+    try:
+        ret = binance.fapiPrivate_post_margintype({'symbol': ticker, 'marginType': 'ISOLATED'})
+        logger.info(ret)
+    except Exception as e:
+        logger.info('set_marginType() Exception occur')
+        logger.info(e)
 
 #----------------------------------------------------------------------------------------------------------------------
 # 매매 알고리즘 시작
