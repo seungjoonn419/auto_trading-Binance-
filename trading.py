@@ -58,6 +58,7 @@ with open("config.txt") as f:
 def make_sell_times(now):
     '''
     금일 09:01:00 시각과 09:01:10초를 만드는 함수
+    param now: 현재 시간
     '''
     today = now
     sell_time = datetime.datetime(year=today.year,
@@ -73,6 +74,7 @@ def make_sell_times(now):
 def make_setup_times(now):
     '''
     익일 09:01:00 시각과 09:01:10초를 만드는 함수
+    param now: 현재 시간
     '''
     tomorrow = now + datetime.timedelta(1)
     midnight = datetime.datetime(year=tomorrow.year,
@@ -84,44 +86,12 @@ def make_setup_times(now):
     midnight_after_10secs = midnight + datetime.timedelta(seconds=20)
     return midnight, midnight_after_10secs
 
-def make_volume_times(now):
-    today = now
-    sell_time = datetime.datetime(year=today.year,
-            month=today.month,
-            day=today.day,
-            hour=13,
-            minute=0,
-            second=0)
-    return sell_time
-
-def make_portfolio_today_times(now):
-    '''
-    금일 09:30:00 시각과 09:30:10초를 만드는 함수
-    :param now: DateTime
-    :return:
-    '''
-    today = now
-    sell_time1 = datetime.datetime(year=today.year,
-            month=today.month,
-            day=today.day,
-            hour=9,
-            minute=30,
-            second=0)
-    sell_time2 = sell_time1 + datetime.timedelta(seconds=10)
-
-    sell_time3 = datetime.datetime(year=today.year,
-            month=today.month,
-            day=today.day,
-            hour=13,
-            minute=30,
-            second=0)
-    sell_time4 = sell_time3 + datetime.timedelta(seconds=10)
-    return sell_time1, sell_time2, sell_time3, sell_time4
 
 def get_cur_prices(tickers):
     '''
     모든 가상화폐에 대한 현재가 조회
-    :return: 현재가, {'KRW-BTC': 7200000, 'KRW-XRP': 500, ...}
+    param tickers: 선물 거래의 모든 종목
+    :return: 현재가
     '''
     try:
         cur_prices = {}
@@ -135,20 +105,10 @@ def get_cur_prices(tickers):
         logger.info(e)
         return None
 
-def inquiry_high_prices(tickers):
-    try:
-        high_prices = {}
-        for ticker in tickers:
-            df = get_df(ticker)
-            today = df.iloc[-1]
-            today_high = today['high']
-            high_prices[ticker] = today_high
-
-        return high_prices
-    except:
-        return  {ticker:0 for ticker in tickers}
-
 def get_df(ticker):
+    '''
+    ticker에 대한 df를 조회
+    '''
     try:
         btc = binance.fetch_ohlcv(
             symbol=ticker, 
@@ -170,7 +130,6 @@ def cal_target(ticker):
     '''
     각 코인에 대한 목표가 저장
     :param ticker: 티커, 'BTC'
-    :return: 목표가
     '''
     try:
         df = get_df(ticker)
@@ -186,6 +145,8 @@ def cal_target(ticker):
         logger.error('cal_target Exception occur')
         logger.error('ticker: %s', ticker)
         logger.error(e)
+
+        # 절대 매수를 하지 못 하도록 높은 값을 설정
         return 100000000000000000000, 100000000000000000000
 
 
@@ -193,7 +154,6 @@ def set_targets(tickers):
     '''
     티커 코인들에 대한 목표가 계산
     :param tickers: 코인에 대한 티커 리스트
-    :return:
     '''
     closes = {}
     targets = {}
@@ -202,9 +162,10 @@ def set_targets(tickers):
         time.sleep(0.1)
     return closes, targets
 
+
 def cal_volume(ticker):
     '''
-    각 코인에 대한 전일 거래량 * 전일 종가 = 거래대금
+    각 코인에 대한 전일 거래량 * 전일 종가 = 거래대금(대략)
     '''
     try:
         df = get_df(ticker)
@@ -220,7 +181,7 @@ def cal_volume(ticker):
 
 def set_volumes(tickers):
     '''
-    티커 코인들에 대한 전일 거래대금
+    티커 코인들에 대한 전일 거래대금(대략)
     '''
     volumes = {}
     each_volume = {}
@@ -244,7 +205,6 @@ def get_portfolio(tickers, prices, targets):
     :param tickers: 코인 리스트
     :param prices: 각 코인에 대한 현재가
     :param targets: 각 코인에 대한 목표가
-    :return:
     '''
     portfolio = []
     try:
@@ -269,9 +229,11 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
     try:
         target = targets[coin]
         price = prices[coin]
+        budget = budget_list[coin]
 
         logger.info('-----buy_volume()-----')
         logger.info('ticker: %s', coin)
+        logger.info('budget(Margin): %s', budget)
         logger.info('price: %s', price)
         logger.info('target: %s', target)
 
@@ -313,8 +275,11 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
         logger.error('buy_volume Exception occur')
         logger.error(e)
 
-# 잔고 조회
+
 def get_balance_unit(tickers):
+    '''
+    잔고 조회
+    '''
     try:
         balance = binance.fetch_balance()
         positions = balance['info']['positions']
@@ -337,8 +302,6 @@ def get_balance_unit(tickers):
 def try_sell(tickers):
     '''
     보유하고 있는 모든 코인에 대해 전량 매도
-    :param tickers: 업비트에서 지원하는 암호화폐의 티커 목록
-    :return:
     '''
     try:
         # 잔고조회
@@ -422,32 +385,13 @@ def set_holdings(tickers):
         logger.error(e)
 
 
-def update_high_prices(tickers, high_prices, cur_prices):
-    '''
-    모든 코인에 대해서 당일 고가를 갱신하여 저장
-    :param tickers: 티커 목록 리스트
-    :param high_prices: 당일 고가
-    :param cur_prices: 현재가
-    :return:
-    '''
-    try:
-        for ticker in tickers:
-            cur_price = cur_prices[ticker]
-            high_price = high_prices[ticker]
-            if cur_price > high_price:
-                high_prices[ticker] = cur_price
-    except:
-        pass
-
 def print_status(portfolio, prices, targets, closes):
     '''
     코인별 현재 상태를 출력
     :param tickers: 티커 리스트
     :param prices: 가격 리스트
     :param targets: 목표가 리스트
-    :param high_prices: 당일 고가 리스트
-    :param kvalues: k값 리스트
-    :return:
+    :param closes: 종가 리스트
     '''
     try:
         for ticker in portfolio:
@@ -474,8 +418,9 @@ def print_status(portfolio, prices, targets, closes):
 
 def get_tickers():
     '''
-    USDT만 조회
-    비트코인과 이더리움은 제외
+    선물 종목만 조회
+    비트코인과 이더리움은 제외('거래량 * 전일 종가'의 비중이 너무 커서 다른 종목의 매수 비중이 작아진다)
+    return: 비트코인과 이더리움을 제외한 선물 종목
     '''
     try:
         markets = binance.load_markets()
@@ -513,14 +458,10 @@ def set_marginType(ticker):
 now = datetime.datetime.now()                                            # 현재 시간 조회
 sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
 setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
-portfolio_time1, portfolio_time2, portfolio_time3, portfolio_time4 = make_portfolio_today_times(now)
-volume_time = make_volume_times(now)                                     # 오후 거래량 시간 설정
 
 tickers = get_tickers()
 COIN_NUM = len(tickers)
 closes, targets = set_targets(tickers)                                   # 코인별 목표가 계산
-
-high_prices = inquiry_high_prices(tickers)                               # 코인별 당일 고가 저장
 
 volume_list = {}                                                         # 전일 거래대금을 저장
 
@@ -532,7 +473,7 @@ logger.info('total_volume: %f', total_volume)
 logger.info('each_volume: %s', each_volume)
 
 budget_list = new_set_budget(tickers, each_volume)                       # 코인별 최대 배팅 금액 계산
-logger.info('budget_list: %s', budget_list)
+logger.info('budget_list(Margin): %s', budget_list)                      # 선물 거래에서는 증거금에 해당
 
 while True:
 
@@ -547,16 +488,12 @@ while True:
         try_sell(tickers)     
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
-        volume_time = make_volume_times(now)                             # 오후 거래량 시간 설정
-        portfolio_time1, portfolio_time2, portfolio_time3, portfolio_time4 = make_portfolio_today_times(now)
 
         tickers = get_tickers()                                          # 티커 리스트 얻기
         COIN_NUM = len(tickers)
         closes, targets = set_targets(tickers)                           # 목표가 갱신
 
         logger.info('Targets: %s', targets)
-
-        high_prices = {ticker: 0 for ticker in tickers}                  # 코인별 당일 고가 초기화
 
         volume_list = {}                                                 # 전일 대비 거래량 순위
 
@@ -574,7 +511,6 @@ while True:
         time.sleep(10)
 
     prices = get_cur_prices(tickers)                                     # 현재가 계산
-    update_high_prices(tickers, high_prices, prices)                     # 고가 갱신
 
     portfolio = get_portfolio(tickers, prices, targets)       
     logger.info('Portfolio: %s', portfolio)
