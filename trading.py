@@ -248,7 +248,7 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
 
                 # 레버리지 설정
                 market = binance.market(coin)
-                leverage = 5
+                leverage = 10
 
                 resp = binance.fapiPrivate_post_leverage({
                     'symbol': market['id'],
@@ -416,6 +416,45 @@ def print_status(portfolio, prices, targets, closes):
         pass
 
 
+def cal_moving_average(ticker, df, window=5):
+    '''
+    5일 이동평균을 계산
+    :param ticker:
+    :param window:
+    :return:
+    '''
+    try:
+        close = df['close']
+        ma_series = close.rolling(window=window).mean()
+        yesterday_ma = ma_series[-2]
+        logger.info('Ticker: %s', ticker)
+        logger.info('ma5: %s', yesterday_ma)
+        return yesterday_ma
+    except Exception as e:
+        logger.info('cal_moving_average() Exception occur')
+        logger.info(e)
+        return 0.00000000001
+
+
+def get_filtered(ticker):
+    '''
+    전일 거래량과 이동 평균선을 조건으로 필터링
+    '''
+    try:
+        df = get_df(ticker)
+        ma5 = cal_moving_average(ticker, df)
+
+        # 전일 거래량이 존재
+        # 전일 종가가 5일 이동평균선 보다 위에 있다.
+        if df.iloc[-2]['volume'] > 0:
+            if df.iloc[-2]['close'] > ma5:
+                return True
+    except Exception as e:
+        logger.info('get_condition() Exception occur')
+        logger.info(e)
+        return False
+
+
 def get_tickers():
     '''
     선물 종목만 조회
@@ -432,9 +471,12 @@ def get_tickers():
                 unit = sym[:length] + "USDT"
                 set_marginType(unit)
 
-                df = get_df(sym)
-                if df.iloc[-2]['volume'] > 0:
+                filtered = get_filtered(sym)
+
+                if filtered == True:
                     tickers.append(sym)
+                else:
+                    logger.info('Ticker: %s Not in tickers', sym) 
 
         return tickers
     except Exception as e:
@@ -461,6 +503,7 @@ setup_time1, setup_time2 = make_setup_times(now)                         # 초�
 
 tickers = get_tickers()
 COIN_NUM = len(tickers)
+logger.info('COIN_NUM: %d', COIN_NUM)
 closes, targets = set_targets(tickers)                                   # 코인별 목표가 계산
 
 volume_list = {}                                                         # 전일 거래대금을 저장
