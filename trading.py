@@ -10,7 +10,7 @@ import pprint
 from binance.client import Client
 
 
-INTERVAL = 1                                        # 매수 시도 interval (1초 기본)
+INTERVAL = 0.5                                      # 매수 시도 interval (1초 기본)
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 0                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
@@ -222,7 +222,7 @@ def get_portfolio(tickers, prices, targets):
         logger.error(e)
         return None
 
-def buy_volume(coin, prices, targets, holdings, budget_list):
+def buy(coin, prices, targets, holdings, budget_list):
     '''
     매수 조건 확인 및 매수 시도
     '''
@@ -231,7 +231,7 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
         price = prices[coin]
         budget = budget_list[coin]
 
-        logger.info('-----buy_volume()-----')
+        logger.info('-----buy()-----')
         logger.info('ticker: %s', coin)
         logger.info('budget(Margin): %s', budget)
         logger.info('price: %s', price)
@@ -268,11 +268,10 @@ def buy_volume(coin, prices, targets, holdings, budget_list):
             else:
                 logger.info('BUY API CALLED: %s', coin)
 
-            #time.sleep(INTERVAL)
         else:
             logger.info('Already have: %s', coin)
     except Exception as e:
-        logger.error('buy_volume Exception occur')
+        logger.error('buy() Exception occur')
         logger.error(e)
 
 
@@ -326,7 +325,8 @@ def try_sell(tickers):
 
                     logger.info('----------sell_market_order ret-----------')
                     logger.info(ret)
-                    #time.sleep(INTERVAL)
+
+                    time.sleep(INTERVAL)
 
                 else:
                     print("SELL API CALLED", ticker, buy_price, min_unit)
@@ -415,40 +415,18 @@ def print_status(portfolio, prices, targets, closes):
     except:
         pass
 
-
-def cal_moving_average(ticker, df, window=5):
-    '''
-    5일 이동평균을 계산
-    :param ticker:
-    :param window:
-    :return:
-    '''
-    try:
-        close = df['close']
-        ma_series = close.rolling(window=window).mean()
-        yesterday_ma = ma_series[-2]
-        logger.info('Ticker: %s', ticker)
-        logger.info('ma5: %s', yesterday_ma)
-        return yesterday_ma
-    except Exception as e:
-        logger.info('cal_moving_average() Exception occur')
-        logger.info(e)
-        return 0.00000000001
-
-
 def get_filtered(ticker):
     '''
-    전일 거래량과 이동 평균선을 조건으로 필터링
+    전일 거래량을 조건으로 필터링
     '''
     try:
         df = get_df(ticker)
-        ma5 = cal_moving_average(ticker, df)
 
         # 전일 거래량이 존재
-        # 전일 종가가 5일 이동평균선 보다 위에 있다.
         if df.iloc[-2]['volume'] > 0:
-            if df.iloc[-2]['close'] > ma5:
-                return True
+            return True
+        else:
+            return False
     except Exception as e:
         logger.info('get_condition() Exception occur')
         logger.info(e)
@@ -470,7 +448,8 @@ def get_tickers():
                 length = len(sym) - 10
                 unit = sym[:length] + "USDT"
                 set_marginType(unit)
-
+                
+                # 전일 거래량이 존재하는지 필터링
                 filtered = get_filtered(sym)
 
                 if filtered == True:
@@ -563,6 +542,6 @@ while True:
     # 매수
     holdings = set_holdings(tickers)
     for coin in portfolio:
-        buy_volume(coin, prices, targets, holdings, budget_list)
+        buy(coin, prices, targets, holdings, budget_list)
 
     time.sleep(INTERVAL)
