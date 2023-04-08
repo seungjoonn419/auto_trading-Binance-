@@ -138,9 +138,10 @@ def cal_target(ticker):
         today_open = yesterday['close']
         yesterday_high = yesterday['high']
         yesterday_low = yesterday['low']
-        target = today_open + (yesterday_high - yesterday_low) * LARRY_K
+        target_long = today_open + (yesterday_high - yesterday_low) * LARRY_K
+        target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
 
-        return today_open, target
+        return today_open, target_long, target_short
     except Exception as e:
         logger.error('cal_target Exception occur')
         logger.error('ticker: %s', ticker)
@@ -156,11 +157,12 @@ def set_targets(tickers):
     :param tickers: 코인에 대한 티커 리스트
     '''
     closes = {}
-    targets = {}
+    target_longs = {}
+    target_shorts = {}
     for ticker in tickers:
-        closes[ticker], targets[ticker] = cal_target(ticker)
+        closes[ticker], target_longs[ticker], target_shorts[ticker] = cal_target(ticker)
         time.sleep(0.1)
-    return closes, targets
+    return closes, target_longs, target_shorts
 
 
 def cal_volume(ticker):
@@ -199,44 +201,49 @@ def set_volumes(tickers):
     return volumes, total_volume, each_volume
 
 
-def get_portfolio(tickers, prices, targets):
+def get_portfolio(tickers, prices, target_longs, target_shorts):
     '''
     매수 조건 확인 및 매수 시도
     :param tickers: 코인 리스트
     :param prices: 각 코인에 대한 현재가
-    :param targets: 각 코인에 대한 목표가
+    :param target_opens: 각 코인에 대한 롱 표지션 목표가
+    :param target_shorts: 각 코인에 대한 숏 포지션 목표가
     '''
-    portfolio = []
+    portfolio_long = []
+    portfolio_short = []
     try:
         for ticker in tickers:
-            price = prices[ticker]              # 현재가
-            target = targets[ticker]            # 목표가
+            price = prices[ticker]                # 현재가
+            target_long = target_longs[ticker]    # 롱 포지션 목표가
+            target_short = target_shorts[ticker]  # 숏 포지션 목표가
 
-            # 현재가가 목표가 이상
-            if price >= target:
-                portfolio.append(ticker)
+            # 현재가가 롱 포지션 목표가 이상
+            # 현재가가 숏 포지션 목표가 이하
+            if price >= target_long:
+                portfolio_long.append(ticker)
+            elif price <= target_short:
+                portfolio_short.append(ticker)
 
-        return portfolio
+        return portfolio_long, portfolio_short
     except Exception as e:
         logger.error('get_portfolio Exception occur')
         logger.error(e)
         return None
 
-def buy(coin, prices, targets, holdings, budget_list):
+def long_open(coin, prices, target_longs, holdings, budget_list):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
-        target = targets[coin]
+        target_long = target_longs[coin]
         price = prices[coin]
         budget = budget_list[coin]
 
-        logger.info('-----buy()-----')
+        logger.info('-----long_open()-----')
         logger.info('ticker: %s', coin)
         logger.info('budget(Margin): %s', budget)
         logger.info('price: %s', price)
-        logger.info('target: %s', target)
-
+        logger.info('target_open: %s', target_long)
 
         # 현재 보유하지 않은 상태 
         if holdings[coin] is False: 
@@ -262,7 +269,7 @@ def buy(coin, prices, targets, holdings, budget_list):
                     symbol=coin,
                     amount=order_amount
                 )
-                logger.info('----------buy_market_order ret-----------')
+                logger.info('----------long_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
                 logger.info(ret)
             else:
@@ -271,7 +278,60 @@ def buy(coin, prices, targets, holdings, budget_list):
         else:
             logger.info('Already have: %s', coin)
     except Exception as e:
-        logger.error('buy() Exception occur')
+        logger.error('long_open() Exception occur')
+        logger.error(e)
+
+
+def short_open(coin, prices, target_shorts, holdings, budget_list):
+    '''
+    매도 조건 확인 및 매도 시도
+    '''
+    try:
+        target_short = target_shorts[coin]
+        price = prices[coin]
+        budget = budget_list[coin]
+
+        logger.info('-----short_open()-----')
+        logger.info('ticker: %s', coin)
+        logger.info('budget(Margin): %s', budget)
+        logger.info('price: %s', price)
+        logger.info('target_short: %s', target_short)
+
+        # 현재 보유하지 않은 상태 
+        if holdings[coin] is False: 
+
+            budget = budget_list[coin] 
+
+            if DEBUG is False:
+                market = binance.market(coin)
+
+                # 레버리지 설정
+                market = binance.market(coin)
+                leverage = 10
+
+                resp = binance.fapiPrivate_post_leverage({
+                    'symbol': market['id'],
+                    'leverage': leverage
+                })
+
+                # 매수 주문
+                order_amount = (budget/price) * leverage * 0.99
+
+                ret = binance.create_market_sell_order(
+                    symbol=coin,
+                    amount=order_amount
+                )
+
+                logger.info('----------short_open() market_order ret-----------')
+                logger.info('Ticker: %s', coin)
+                logger.info(ret)
+            else:
+                logger.info('BUY API CALLED: %s', coin)
+
+        else:
+            logger.info('Already have: %s', coin)
+    except Exception as e:
+        logger.error('short_open() Exception occur')
         logger.error(e)
 
 
@@ -285,8 +345,7 @@ def get_balance_unit(tickers):
         units = {ticker:0 for ticker in tickers}
 
         for position in positions:
-
-            if float(position['positionAmt']) > 0:
+            if float(position['positionAmt']) != 0:
                 logger.info('position: %s', position)
                 length = len(position['symbol']) - 4
                 unit = position['symbol'][:length] + "/USDT:USDT"
@@ -298,7 +357,7 @@ def get_balance_unit(tickers):
         logger.info(e)
 
 
-def try_sell(tickers):
+def close_position(tickers):
     '''
     보유하고 있는 모든 코인에 대해 전량 매도
     '''
@@ -316,6 +375,7 @@ def try_sell(tickers):
             logger.info('ticker: ', ticker)
             logger.info('try_sell unit: ', unit)
 
+            # 롱 포지션 정리
             if unit > 0:
                 if DEBUG is False:
                     ret = binance.create_market_sell_order(
@@ -323,13 +383,28 @@ def try_sell(tickers):
                         amount=unit
                     )
 
-                    logger.info('----------sell_market_order ret-----------')
+                    logger.info('----------close long position ret-----------')
                     logger.info(ret)
 
                     time.sleep(INTERVAL)
 
                 else:
-                    print("SELL API CALLED", ticker, buy_price, min_unit)
+                    logger.info('Long position close(): %s', ticker)
+            # 숏 포지션 정리
+            elif unit < 0:
+                if DEBUG is False:
+                    ret = binance.create_market_buy_order(
+                        symbol=ticker,
+                        amount=-unit
+                    )
+
+                    logger.info('----------close short position ret-----------')
+                    logger.info(ret)
+
+                    time.sleep(INTERVAL)
+
+                else:
+                    logger.info('Short position close(): %s', ticker)
 
         # 매도 이후에 잔고를 재조회하여 확인한다
         logger.info('try_sell after sell units')
@@ -376,7 +451,7 @@ def set_holdings(tickers):
         for ticker in tickers:
             unit = units.get(ticker, 0)                     # 보유 수량
 
-            if unit > 0:
+            if unit != 0:
                 holdings[ticker] = True
 
         return holdings
@@ -483,12 +558,12 @@ setup_time1, setup_time2 = make_setup_times(now)                         # 초�
 tickers = get_tickers()
 COIN_NUM = len(tickers)
 logger.info('COIN_NUM: %d', COIN_NUM)
-closes, targets = set_targets(tickers)                                   # 코인별 목표가 계산
+closes, target_longs, target_shorts = set_targets(tickers)               # 코인별 목표가 계산
+logger.info('Long Targets: %s', target_longs)
+logger.info('Short Targets: %s', target_shorts)
 
 volume_list = {}                                                         # 전일 거래대금을 저장
 
-# upbit API의 호출 제한 때문에 2초간의 딜레이를 준다.
-time.sleep(2)
 volume_list, total_volume, each_volume = set_volumes(tickers)            # 전일 거래량
 logger.info('volume_list: %s', volume_list)
 logger.info('total_volume: %f', total_volume)
@@ -506,21 +581,22 @@ while True:
     if (sell_time1 < now < sell_time2) or (setup_time1 < now < setup_time2):
         logger.info('New Date SetUp Start')
 
-        # 시가에 매도
-        try_sell(tickers)     
+        # 모든 포지션 정리
+        close_position(tickers)     
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
         tickers = get_tickers()                                          # 티커 리스트 얻기
         COIN_NUM = len(tickers)
-        closes, targets = set_targets(tickers)                           # 목표가 갱신
+        logger.info('COIN_NUM: %d', COIN_NUM)
 
-        logger.info('Targets: %s', targets)
+        closes, target_longs, target_shorts = set_targets(tickers)       # 목표가 계산
+
+        logger.info('Long Targets: %s', target_longs)
+        logger.info('Short Targets: %s', target_shorts)
 
         volume_list = {}                                                 # 전일 대비 거래량 순위
 
-        # upbit API의 호출 제한 때문에 2초간의 딜레이를 준다.
-        time.sleep(2)
         volume_list, total_volume, each_volume = set_volumes(tickers)    # 전일 거래량
         logger.info('volume_list: %s', volume_list)
         logger.info('total_volume: %f', total_volume)
@@ -534,14 +610,21 @@ while True:
 
     prices = get_cur_prices(tickers)                                     # 현재가 계산
 
-    portfolio = get_portfolio(tickers, prices, targets)       
-    logger.info('Portfolio: %s', portfolio)
+    portfolio_long, portfolio_short = get_portfolio(tickers, prices, target_longs, target_shorts)       
+    logger.info('Portfolio_long: %s', portfolio_long)
+    logger.info('Portfolio_short: %s', portfolio_short)
 
     #print_status(portfolio, prices, targets, closes)
 
-    # 매수
+    # 현재 포지션 유무 확인
     holdings = set_holdings(tickers)
-    for coin in portfolio:
-        buy(coin, prices, targets, holdings, budget_list)
+
+    # 롱 오픈 포지션
+    for coin in portfolio_long:
+        long_open(coin, prices, target_longs, holdings, budget_list)
+
+    # 숏 오픈 포지션
+    for coin in portfolio_short:
+        short_open(coin, prices, target_shorts, holdings, budget_list)
 
     time.sleep(INTERVAL)
