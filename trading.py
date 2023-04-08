@@ -10,7 +10,7 @@ import pprint
 from binance.client import Client
 
 
-INTERVAL = 0.5                                      # 매수 시도 interval (1초 기본)
+INTERVAL = 0.25                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 0                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
@@ -153,7 +153,7 @@ def cal_target(ticker):
 
 def set_targets(tickers):
     '''
-    티커 코인들에 대한 목표가 계산
+    코인들에 대한 목표가 계산
     :param tickers: 코인에 대한 티커 리스트
     '''
     closes = {}
@@ -161,39 +161,29 @@ def set_targets(tickers):
     target_shorts = {}
     for ticker in tickers:
         closes[ticker], target_longs[ticker], target_shorts[ticker] = cal_target(ticker)
-        time.sleep(0.1)
+        time.sleep(INTERVAL)
     return closes, target_longs, target_shorts
 
 
-def cal_volume(ticker):
+def set_volumes(tickers, holdings):
     '''
-    각 코인에 대한 전일 거래량 * 전일 종가 = 거래대금(대략)
-    '''
-    try:
-        df = get_df(ticker)
-        yesterday = df.iloc[-2]
-        yesterday_volume = yesterday['volume']
-        yesterday_close = yesterday['close']
-
-        return yesterday_volume * yesterday_close 
-    except Exception as e:
-        logger.error('cal_volume Exception occur')
-        logger.error(e)
-        return 0
-
-def set_volumes(tickers):
-    '''
-    티커 코인들에 대한 전일 거래대금(대략)
+    코인들에 대한 24시간 동안 거래대금
+    현재 보유 중인 포지션에 대해서는 거래대금을 0으로 한다
     '''
     volumes = {}
     each_volume = {}
     total_volume = 0
 
+    quote_tickers = binance.fetch_tickers()
+
     for ticker in tickers:
-        volume = cal_volume(ticker)
-        volumes[ticker] = volume
-        total_volume += volume
-        time.sleep(0.1)
+
+        if holdings[ticker] == False:                       # 보유
+            volume = quote_tickers[ticker]['quoteVolume']
+            volumes[ticker] = volume
+            total_volume += volume
+        else:                                               # 보유하지 않음
+            volumes[ticker] = 0
 
     for ticker in tickers:
         each_volume[ticker] = volumes[ticker]/total_volume
@@ -346,7 +336,7 @@ def get_balance_unit(tickers):
 
         for position in positions:
             if float(position['positionAmt']) != 0:
-                logger.info('position: %s', position)
+                #logger.info('position: %s', position)
                 length = len(position['symbol']) - 4
                 unit = position['symbol'][:length] + "/USDT:USDT"
                 units[unit] = float(position['positionAmt'])
@@ -416,7 +406,7 @@ def close_position(tickers):
         logger.error(e)
 
 
-def new_set_budget(tickers, each_volume):
+def set_budget(tickers, each_volume):
     '''
     코인별 투자할 투자 금액 계산
     :return: 원화잔고 * 코인별 투자 비율
@@ -562,15 +552,7 @@ closes, target_longs, target_shorts = set_targets(tickers)               # 코�
 logger.info('Long Targets: %s', target_longs)
 logger.info('Short Targets: %s', target_shorts)
 
-volume_list = {}                                                         # 전일 거래대금을 저장
-
-volume_list, total_volume, each_volume = set_volumes(tickers)            # 전일 거래량
-logger.info('volume_list: %s', volume_list)
-logger.info('total_volume: %f', total_volume)
-logger.info('each_volume: %s', each_volume)
-
-budget_list = new_set_budget(tickers, each_volume)                       # 코인별 최대 배팅 금액 계산
-logger.info('budget_list(Margin): %s', budget_list)                      # 선물 거래에서는 증거금에 해당
+volume_list = {}                                                         # 24시간 거래대금을 저장
 
 while True:
 
@@ -581,8 +563,7 @@ while True:
     if (sell_time1 < now < sell_time2) or (setup_time1 < now < setup_time2):
         logger.info('New Date SetUp Start')
 
-        # 모든 포지션 정리
-        close_position(tickers)     
+        close_position(tickers)                                          # 모든 포지션 정리
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
@@ -595,29 +576,23 @@ while True:
         logger.info('Long Targets: %s', target_longs)
         logger.info('Short Targets: %s', target_shorts)
 
-        volume_list = {}                                                 # 전일 대비 거래량 순위
-
-        volume_list, total_volume, each_volume = set_volumes(tickers)    # 전일 거래량
-        logger.info('volume_list: %s', volume_list)
-        logger.info('total_volume: %f', total_volume)
-        logger.info('each_volume: %s', each_volume)
-
-        budget_list = new_set_budget(tickers, each_volume)               # 코인별 최대 배팅 금액 계산
-        logger.info('budget_list: %s', budget_list)
-
         logger.info('New Date SetUp End')
         time.sleep(10)
 
     prices = get_cur_prices(tickers)                                     # 현재가 계산
 
+    holdings = set_holdings(tickers)                                     # 현재 포지션 유무 확인
+
+    # 코인별 마진 계산
+    volume_list, total_volume, each_volume = set_volumes(tickers, holdings)
+    budget_list = set_budget(tickers, each_volume)
+    logger.info('budget_list(Margin): %s', budget_list)
+
     portfolio_long, portfolio_short = get_portfolio(tickers, prices, target_longs, target_shorts)       
-    logger.info('Portfolio_long: %s', portfolio_long)
+    logger.info('Portfolio_long: %s\n', portfolio_long)
     logger.info('Portfolio_short: %s', portfolio_short)
 
     #print_status(portfolio, prices, targets, closes)
-
-    # 현재 포지션 유무 확인
-    holdings = set_holdings(tickers)
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
