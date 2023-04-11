@@ -124,7 +124,7 @@ def get_df(ticker):
     except Exception as e:
         logger.error('get_df() Exception occur')
         logger.error(e)
-        return Non
+        return None
 
 def cal_target(ticker):
     '''
@@ -140,8 +140,10 @@ def cal_target(ticker):
         yesterday_low = yesterday['low']
         target_long = today_open + (yesterday_high - yesterday_low) * LARRY_K
         target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
+        target_long_sl = target_long * 0.95
+        target_short_sl = target_short * 1.05
 
-        return today_open, target_long, target_short
+        return today_open, target_long, target_short, target_long_sl, target_short_sl
     except Exception as e:
         logger.error('cal_target Exception occur')
         logger.error('ticker: %s', ticker)
@@ -159,10 +161,13 @@ def set_targets(tickers):
     closes = {}
     target_longs = {}
     target_shorts = {}
+    target_long_sls = {}
+    target_short_sls = {}
+
     for ticker in tickers:
-        closes[ticker], target_longs[ticker], target_shorts[ticker] = cal_target(ticker)
+        closes[ticker], target_longs[ticker], target_shorts[ticker], target_long_sls[ticker], target_short_sls[ticker] = cal_target(ticker)
         time.sleep(INTERVAL)
-    return closes, target_longs, target_shorts
+    return closes, target_longs, target_shorts, target_long_sls, target_short_sls
 
 
 def set_volumes(tickers, holdings):
@@ -220,12 +225,13 @@ def get_portfolio(tickers, prices, target_longs, target_shorts):
         logger.error(e)
         return None
 
-def long_open(coin, prices, target_longs, holdings, budget_list):
+def long_open(coin, prices, target_longs, target_long_sls, holdings, budget_list):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
         target_long = target_longs[coin]
+        target_long_sl = target_long_sls[coin]
         price = prices[coin]
         budget = budget_list[coin]
 
@@ -255,13 +261,34 @@ def long_open(coin, prices, target_longs, holdings, budget_list):
                 # 매수 주문
                 order_amount = (budget/price) * leverage * 0.99
 
+                '''
                 ret = binance.create_market_buy_order(
                     symbol=coin,
                     amount=order_amount
                 )
+                '''
+
+                # market price (ex: 19500$)
+                ret = binance.create_order(
+                    symbol=coin,
+                    type="MARKET",
+                    side="buy",
+                    amount=order_amount
+                )
+
+                # take profit
+                ret_sl = binance.create_order(
+                    symbol=coin,
+                    type="TAKE_PROFIT_MARKET",
+                    side="sell",
+                    amount=coin,
+                    params={'stopPrice': target_long_sl}
+                )
+
                 logger.info('----------long_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
                 logger.info(ret)
+                logger.info(ret_sl)
             else:
                 logger.info('BUY API CALLED: %s', coin)
 
@@ -272,7 +299,7 @@ def long_open(coin, prices, target_longs, holdings, budget_list):
         logger.error(e)
 
 
-def short_open(coin, prices, target_shorts, holdings, budget_list):
+def short_open(coin, prices, target_shorts, target_short_sls, holdings, budget_list):
     '''
     매도 조건 확인 및 매도 시도
     '''
@@ -303,18 +330,38 @@ def short_open(coin, prices, target_shorts, holdings, budget_list):
                     'symbol': market['id'],
                     'leverage': leverage
                 })
-
+        
                 # 매수 주문
                 order_amount = (budget/price) * leverage * 0.99
 
+                '''
                 ret = binance.create_market_sell_order(
                     symbol=coin,
                     amount=order_amount
+                )
+                '''
+
+                # market price (ex: 19500$)
+                ret = binance.create_order(
+                    symbol=coin,
+                    type="MARKET",
+                    side="sell",
+                    amount=order_amount
+                )
+
+                # take profit
+                ret_sl = binance.create_order(
+                    symbol=coin,
+                    type="TAKE_PROFIT_MARKET",
+                    side="buy",
+                    amount=coin,
+                    params={'stopPrice': target_long_sl}
                 )
 
                 logger.info('----------short_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
                 logger.info(ret)
+                logger.info(ret_sl)
             else:
                 logger.info('BUY API CALLED: %s', coin)
 
@@ -548,9 +595,12 @@ setup_time1, setup_time2 = make_setup_times(now)                         # 초�
 tickers = get_tickers()
 COIN_NUM = len(tickers)
 logger.info('COIN_NUM: %d', COIN_NUM)
-closes, target_longs, target_shorts = set_targets(tickers)               # 코인별 목표가 계산
+# 목표가 계산
+closes, target_longs, target_shorts, target_long_sls, target_short_sls = set_targets(tickers)
 logger.info('Long Targets: %s', target_longs)
+logger.info('Long sl Targets: %s', target_long_sls)
 logger.info('Short Targets: %s', target_shorts)
+logger.info('Short sl Targets: %s', target_short_sls)
 
 volume_list = {}                                                         # 24시간 거래대금을 저장
 
@@ -571,10 +621,13 @@ while True:
         COIN_NUM = len(tickers)
         logger.info('COIN_NUM: %d', COIN_NUM)
 
-        closes, target_longs, target_shorts = set_targets(tickers)       # 목표가 계산
+        # 목표가 계산
+        closes, target_longs, target_shorts, target_long_sls, target_short_sls = set_targets(tickers)
 
         logger.info('Long Targets: %s', target_longs)
+        logger.info('Long sl Targets: %s', target_long_sls)
         logger.info('Short Targets: %s', target_shorts)
+        logger.info('Short sl Targets: %s', target_short_sls)
 
         logger.info('New Date SetUp End')
         time.sleep(10)
@@ -586,7 +639,8 @@ while True:
     # 코인별 마진 계산
     volume_list, total_volume, each_volume = set_volumes(tickers, holdings)
     budget_list = set_budget(tickers, each_volume)
-    logger.info('budget_list(Margin): %s', budget_list)
+    sort_budget_list = sorted(budget_list.items(), key = lambda item: item[1], reverse = True)
+    logger.info('budget_list(Margin): %s', sort_budget_list)
 
     portfolio_long, portfolio_short = get_portfolio(tickers, prices, target_longs, target_shorts)       
     logger.info('Portfolio_long: %s\n', portfolio_long)
@@ -596,10 +650,10 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, prices, target_longs, holdings, budget_list)
+        long_open(coin, prices, target_longs, target_long_sls, holdings, budget_list)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, prices, target_shorts, holdings, budget_list)
+        short_open(coin, prices, target_shorts, target_short_sls, holdings, budget_list)
 
     time.sleep(INTERVAL)
