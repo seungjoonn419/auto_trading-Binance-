@@ -10,6 +10,9 @@ import pprint
 from binance.client import Client
 
 
+# 바이낸스 API 호출 제한
+# 1200/60s
+# 20/1s
 INTERVAL = 0.25                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
@@ -554,8 +557,6 @@ logger.info('Long sl Target: %s', target_long_sl)
 logger.info('Short Target: %s', target_short)
 logger.info('Short sl Target: %s', target_short_sl)
 
-volume_list = {}                                                         # 24시간 거래대금을 저장
-
 while True:
 
     now = datetime.datetime.now()
@@ -563,9 +564,9 @@ while True:
     # 새로운 거래일에 대한 데이터 셋업 (09:01:00 ~ 09:01:20)
     # 금일, 익일 포함
     if (sell_time1 < now < sell_time2) or (setup_time1 < now < setup_time2):
-        logger.info('New Date SetUp Start')
+        logger.info('New Date Set Up Start')
 
-        close_position(ticker)                                          # 모든 포지션 정리
+        close_position(ticker)                                           # 포지션 정리
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
@@ -577,16 +578,15 @@ while True:
         logger.info('Short Target: %s', target_shorts)
         logger.info('Short sl Target: %s', target_short_sls)
 
-        logger.info('New Date SetUp End')
-        time.sleep(10)
+        logger.info('New Date Set Up End')
+        time.sleep(20)
 
-    price = get_cur_price(ticker)                                     # 현재가 계산
+    price = get_cur_price(ticker)                                        # 현재가 계산
 
-    holding = set_holding(ticker)                                     # 현재 포지션 유무 확인
+    holding = set_holding(ticker)                                        # 현재 포지션 유무 확인
     logger.info('Is holding: %s', holding)
 
-    # 마진 계산
-    budget = set_budget(ticker)
+    budget = set_budget(ticker)                                          # 마진 계산
     logger.info('Budget: %s', budget)
 
     portfolio_long, portfolio_short = get_portfolio(ticker, price, target_long, target_short)       
