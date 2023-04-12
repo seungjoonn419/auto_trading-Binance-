@@ -213,11 +213,12 @@ def get_portfolio(ticker, price, target_long, target_short):
         logger.error(e)
         return None
 
-def long_open(coin, price, target_long, target_long_sl, holding, budget):
+def long_open(coin, price, target_long, target_long_sl, holding):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
+        budget = set_budget(ticker)                          # 마진 계산
         logger.info('-----long_open()-----')
         logger.info('ticker: %s', coin)
         logger.info('budget(Margin): %s', budget)
@@ -279,6 +280,7 @@ def short_open(coin, price, target_short, target_short_sl, holding, budget):
     매도 조건 확인 및 매도 시도
     '''
     try:
+        budget = set_budget(ticker)                          # 마진 계산
         logger.info('-----short_open()-----')
         logger.info('ticker: %s', coin)
         logger.info('budget(Margin): %s', budget)
@@ -586,19 +588,16 @@ while True:
     holding = set_holding(ticker)                                        # 현재 포지션 유무 확인
     logger.info('Is holding: %s', holding)
 
-    budget = set_budget(ticker)                                          # 마진 계산
-    logger.info('Budget: %s', budget)
-
     portfolio_long, portfolio_short = get_portfolio(ticker, price, target_long, target_short)       
     logger.info('portfolio_long: %s', portfolio_long)
     logger.info('portfolio_short: %s', portfolio_short)
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, holding, budget)
+        long_open(coin, price, target_long, target_long_sl, holding)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, holding, budget)
+        short_open(coin, price, target_short, target_short_sl, holding)
 
     time.sleep(INTERVAL)
