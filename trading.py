@@ -11,8 +11,8 @@ from binance.client import Client
 
 
 # 바이낸스 API 호출 제한
-# 1200/60s
-# 20/1s
+# 1,200 request weight per minute
+# 50 orders pe 10 seconds
 INTERVAL = 0.25                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
@@ -244,13 +244,19 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 # 매수 주문
                 order_amount = (budget/price) * leverage * 0.99
 
+                logger.info('----------long_open() market_order ret-----------')
+                logger.info('Ticker: %s', coin)
+
                 # market price
-                ret = binance.create_order(
-                    symbol=coin,
-                    type="MARKET",
-                    side="buy",
-                    amount=order_amount
-                )
+                for i in range(0,20):
+                    ret = binance.create_order(
+                        symbol=coin,
+                        type="MARKET",
+                        side="buy",
+                        amount=order_amount/20
+                    )
+                    logger.info(ret)
+                    time.sleep(0.05)
 
                 # stop loss
                 ret_sl = binance.create_order(
@@ -261,9 +267,6 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                     params={'stopPrice': target_long_sl}
                 )
 
-                logger.info('----------long_open() market_order ret-----------')
-                logger.info('Ticker: %s', coin)
-                logger.info(ret)
                 logger.info(ret_sl)
             else:
                 logger.info('BUY API CALLED: %s', coin)
@@ -306,13 +309,19 @@ def short_open(coin, price, target_short, target_short_sl, holding, budget):
                 # 매수 주문
                 order_amount = (budget/price) * leverage * 0.99
 
+                logger.info('----------short_open() market_order ret-----------')
+                logger.info('Ticker: %s', coin)
+
                 # market price
-                ret = binance.create_order(
-                    symbol=coin,
-                    type="MARKET",
-                    side="sell",
-                    amount=order_amount
-                )
+                for i in range(0,20):
+                    ret = binance.create_order(
+                        symbol=coin,
+                        type="MARKET",
+                        side="sell",
+                        amount=order_amount
+                    )
+                    logger.info(ret)
+                    time.sleep(0.05)
 
                 # stop loss
                 ret_sl = binance.create_order(
@@ -323,9 +332,6 @@ def short_open(coin, price, target_short, target_short_sl, holding, budget):
                     params={'stopPrice': target_short_sl}
                 )
 
-                logger.info('----------short_open() market_order ret-----------')
-                logger.info('Ticker: %s', coin)
-                logger.info(ret)
                 logger.info(ret_sl)
             else:
                 logger.info('BUY API CALLED: %s', coin)
@@ -380,30 +386,28 @@ def close_position(tickers):
             # 롱 포지션 정리
             if unit > 0:
                 if DEBUG is False:
-                    ret = binance.create_market_sell_order(
-                        symbol=ticker,
-                        amount=unit
-                    )
-
                     logger.info('----------close long position ret-----------')
-                    logger.info(ret)
-
-                    time.sleep(INTERVAL)
+                    for i in range(0,20):
+                        ret = binance.create_market_sell_order(
+                            symbol=ticker,
+                            amount=unit/20
+                        )
+                        logger.info(ret)
+                        time.sleep(0.05)
 
                 else:
                     logger.info('Long position close(): %s', ticker)
             # 숏 포지션 정리
             elif unit < 0:
                 if DEBUG is False:
-                    ret = binance.create_market_buy_order(
-                        symbol=ticker,
-                        amount=-unit
-                    )
-
                     logger.info('----------close short position ret-----------')
-                    logger.info(ret)
-
-                    time.sleep(INTERVAL)
+                    for i in range(0,20):
+                        ret = binance.create_market_buy_order(
+                            symbol=ticker,
+                            amount=-unit/20
+                        )
+                        logger.info(ret)
+                        time.sleep(0.05)
 
                 else:
                     logger.info('Short position close(): %s', ticker)
