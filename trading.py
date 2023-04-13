@@ -318,7 +318,7 @@ def short_open(coin, price, target_short, target_short_sl, holding, budget):
                         symbol=coin,
                         type="MARKET",
                         side="sell",
-                        amount=order_amount
+                        amount=order_amount/20
                     )
                     logger.info(ret)
                     time.sleep(0.05)
