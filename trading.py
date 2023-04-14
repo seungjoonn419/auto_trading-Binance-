@@ -242,7 +242,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 })
 
                 # 매수 주문
-                order_amount = (budget/price) * leverage * 0.99
+                order_amount = (budget/price) * leverage
 
                 logger.info('----------long_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
@@ -307,7 +307,7 @@ def short_open(coin, price, target_short, target_short_sl, holding, budget):
                 })
         
                 # 매수 주문
-                order_amount = (budget/price) * leverage * 0.99
+                order_amount = (budget/price) * leverage
 
                 logger.info('----------short_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
@@ -365,56 +365,55 @@ def get_balance_unit(tickers):
         logger.info(e)
 
 
-def close_position(tickers):
+def close_position(ticker):
     '''
     보유하고 있는 모든 코인에 대해 전량 매도
     '''
     try:
         # 잔고조회
-        units = get_balance_unit(tickers)
+        units = get_balance_unit(ticker)
 
         logger.info('----------try_sell(tickers)---------')
         logger.info('try_sell before sell units')
         logger.info(units)
 
-        for ticker in tickers:
-            unit = units.get(ticker, 0)                     # 보유 수량
+        unit = units.get(ticker, 0)                     # 보유 수량
 
-            logger.info('ticker: ', ticker)
-            logger.info('try_sell unit: ', unit)
+        logger.info('ticker: ', ticker)
+        logger.info('try_sell unit: ', unit)
 
-            # 롱 포지션 정리
-            if unit > 0:
-                if DEBUG is False:
-                    logger.info('----------close long position ret-----------')
-                    for i in range(0,20):
-                        ret = binance.create_market_sell_order(
-                            symbol=ticker,
-                            amount=unit/20
-                        )
-                        logger.info(ret)
-                        time.sleep(0.05)
+        # 롱 포지션 정리
+        if unit > 0:
+            if DEBUG is False:
+                logger.info('----------close long position ret-----------')
+                for i in range(0,20):
+                    ret = binance.create_market_sell_order(
+                        symbol=ticker,
+                        amount=unit/20
+                    )
+                    logger.info(ret)
+                    time.sleep(0.05)
 
-                else:
-                    logger.info('Long position close(): %s', ticker)
-            # 숏 포지션 정리
-            elif unit < 0:
-                if DEBUG is False:
-                    logger.info('----------close short position ret-----------')
-                    for i in range(0,20):
-                        ret = binance.create_market_buy_order(
-                            symbol=ticker,
-                            amount=-unit/20
-                        )
-                        logger.info(ret)
-                        time.sleep(0.05)
+            else:
+                logger.info('Long position close(): %s', ticker)
+        # 숏 포지션 정리
+        elif unit < 0:
+            if DEBUG is False:
+                logger.info('----------close short position ret-----------')
+                for i in range(0,20):
+                    ret = binance.create_market_buy_order(
+                        symbol=ticker,
+                        amount=-unit/20
+                    )
+                    logger.info(ret)
+                    time.sleep(0.05)
 
-                else:
-                    logger.info('Short position close(): %s', ticker)
+            else:
+                logger.info('Short position close(): %s', ticker)
 
         # 매도 이후에 잔고를 재조회하여 확인한다
         logger.info('try_sell after sell units')
-        units = get_balance_unit(tickers)
+        units = get_balance_unit(ticker)
         logger.info(units)
 
     except Exception as e:
@@ -579,10 +578,10 @@ while True:
         # 목표가 계산
         close, target_long, target_short, target_long_sl, target_short_sl = set_target(ticker)
 
-        logger.info('Long Target: %s', target_longs)
-        logger.info('Long sl Target: %s', target_long_sls)
-        logger.info('Short Target: %s', target_shorts)
-        logger.info('Short sl Target: %s', target_short_sls)
+        logger.info('Long Target: %s', target_long)
+        logger.info('Long sl Target: %s', target_long_sl)
+        logger.info('Short Target: %s', target_short)
+        logger.info('Short sl Target: %s', target_short_sl)
 
         logger.info('New Date Set Up End')
         time.sleep(20)
