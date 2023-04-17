@@ -235,7 +235,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 })
 
                 # 매수 주문
-                order_amount = (budget/price) * leverage
+                order_amount = (budget/price) * leverage * 0.99
 
                 logger.info('----------long_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
@@ -300,7 +300,7 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 })
         
                 # 매수 주문
-                order_amount = (budget/price) * leverage
+                order_amount = (budget/price) * leverage * 0.99
 
                 logger.info('----------short_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
