@@ -127,7 +127,7 @@ def get_df(ticker):
         logger.error(e)
         return None
 
-def cal_target(ticker):
+def set_target(ticker):
     '''
     각 코인에 대한 목표가 저장
     :param ticker: 티커, 'BTC'
@@ -141,8 +141,10 @@ def cal_target(ticker):
         yesterday_low = yesterday['low']
         target_long = today_open + (yesterday_high - yesterday_low) * LARRY_K
         target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
-        target_long_sl = target_long * 0.95
-        target_short_sl = target_short * 1.05
+
+        # Stop Limitt 0.5%로 지정
+        target_long_sl = target_long * 0.995
+        target_short_sl = target_short * 1.005
 
         return today_open, target_long, target_short, target_long_sl, target_short_sl
     except Exception as e:
@@ -152,15 +154,6 @@ def cal_target(ticker):
 
         # 절대 매수를 하지 못 하도록 높은 값을 설정
         return 100000000000000000000, 100000000000000000000
-
-
-def set_target(ticker):
-    '''
-    코인들에 대한 목표가 계산
-    :param tickers: 코인에 대한 티커 리스트
-    '''
-    close, target_long, target_short, target_long_sl, target_short_sl = cal_target(ticker)
-    return close, target_long, target_short, target_long_sl, target_short_sl
 
 
 def set_volumes(tickers, holdings):
@@ -278,7 +271,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
         logger.error(e)
 
 
-def short_open(coin, price, target_short, target_short_sl, holding, budget):
+def short_open(coin, price, target_short, target_short_sl, holding):
     '''
     매도 조건 확인 및 매도 시도
     '''
