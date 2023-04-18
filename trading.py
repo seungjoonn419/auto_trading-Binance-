@@ -247,7 +247,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                         side="buy",
                         amount=order_amount/20
                     )
-                    logger.info(ret)
+                    logger.info('ret: %s', ret)
                     time.sleep(0.05)
 
                 # stop loss
@@ -258,7 +258,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                     amount=order_amount,
                     params={'stopPrice': target_long_sl}
                 )
-                logger.info(ret_sl)
+                logger.info('ret_sl: %s', ret_sl)
 
             else:
                 logger.info('BUY API CALLED: %s', coin)
