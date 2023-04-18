@@ -230,11 +230,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 budget = set_budget(ticker)                          
 
                 # 매수 주문
-<<<<<<< HEAD
-                order_amount = (budget/price) * leverage / 20
-=======
-                order_amount = (budget/price) * leverage
->>>>>>> parent of e273117 (modifiy amount *0.99)
+                order_amount = (budget/price) * leverage * 0.99
 
                 logger.info('----------long_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
@@ -243,14 +239,16 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 logger.info('target_open: %s', target_long)
                 logger.info('target_open_sl: %s', target_long_sl)
 
-                # market price
-                ret = binance.create_order(
-                    symbol=coin,
-                    type="MARKET",
-                    side="buy",
-                    amount=order_amount
-                )
-                logger.info(ret)
+                for i in range(0, 20):
+                    # market price
+                    ret = binance.create_order(
+                        symbol=coin,
+                        type="MARKET",
+                        side="buy",
+                        amount=order_amount/20
+                    )
+                    logger.info(ret)
+                    time.sleep(0.05)
 
                 # stop loss
                 ret_sl = binance.create_order(
@@ -260,8 +258,8 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                     amount=order_amount,
                     params={'stopPrice': target_long_sl}
                 )
-
                 logger.info(ret_sl)
+
             else:
                 logger.info('BUY API CALLED: %s', coin)
 
@@ -292,18 +290,12 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                     'symbol': market['id'],
                     'leverage': leverage
                 })
-<<<<<<< HEAD
                 
                 # 마진 계산
                 budget = set_budget(ticker)
-
-                # 매도 주문
-                order_amount = (budget/price) * leverage / 20
-=======
         
                 # 매수 주문
-                order_amount = (budget/price) * leverage
->>>>>>> parent of e273117 (modifiy amount *0.99)
+                order_amount = (budget/price) * leverage * 0.99
 
                 logger.info('----------short_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
@@ -312,14 +304,16 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 logger.info('target_short: %s', target_short)
                 logger.info('target_short_sl: %s', target_short_sl)
 
-                # market price
-                ret = binance.create_order(
-                    symbol=coin,
-                    type="MARKET",
-                    side="sell",
-                    amount=order_amount
-                )
-                logger.info('ret: %s', ret)
+                for i in range(0, 20):
+                    # market price
+                    ret = binance.create_order(
+                        symbol=coin,
+                        type="MARKET",
+                        side="sell",
+                        amount=order_amount/20
+                    )
+                    logger.info('ret: %s', ret)
+                    time.sleep(0.05)
 
                 # stop loss
                 ret_sl = binance.create_order(
@@ -329,8 +323,8 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                     amount=order_amount,
                     params={'stopPrice': target_short_sl}
                 )
-
                 logger.info('ret_sl: %s', ret_sl)
+
             else:
                 logger.info('BUY API CALLED: %s', coin)
 
@@ -595,14 +589,10 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        for i in range(0,20):
-            long_open(coin, price, target_long, target_long_sl, holding)
-            time.sleep(0.05)
+        long_open(coin, price, target_long, target_long_sl, holding)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        for i in range(0,20):
-            short_open(coin, price, target_short, target_short_sl, holding)
-            time.sleep(0.05)
+        short_open(coin, price, target_short, target_short_sl, holding)
 
     time.sleep(INTERVAL)
