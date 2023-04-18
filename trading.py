@@ -13,7 +13,7 @@ from binance.client import Client
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
 # 50 orders pe 10 seconds
-INTERVAL = 0.5                                      # API 호출 간격
+INTERVAL = 0.25                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
