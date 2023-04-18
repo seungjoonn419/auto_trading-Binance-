@@ -211,36 +211,31 @@ def long_open(coin, price, target_long, target_long_sl, holding):
     매수 조건 확인 및 매수 시도
     '''
     try:
-        # 현재 보유하지 않은 상태 
-        if holding is False: 
+        if holding is False:                                        # 현재 보유하지 않은 상태
 
             if DEBUG is False:
                 market = binance.market(coin)
 
                 # 레버리지 설정
-                market = binance.market(coin)
                 leverage = 10
-
                 resp = binance.fapiPrivate_post_leverage({
                     'symbol': market['id'],
                     'leverage': leverage
                 })
 
-                # 마진 계산
-                budget = set_budget(ticker)                          
+                budget = set_budget(ticker)                         # 마진 계산
 
-                # 매수 주문
-                order_amount = (budget/price) * leverage * 0.99
+                order_amount = (budget/price) * leverage * 0.99     # 롱 포지션
 
-                logger.info('----------long_open() market_order ret-----------')
+                logger.info('----------long_open()-----------')
                 logger.info('Ticker: %s', coin)
                 logger.info('budget(Margin): %s', budget)
                 logger.info('price: %s', price)
                 logger.info('target_open: %s', target_long)
                 logger.info('target_open_sl: %s', target_long_sl)
 
+                # 시장가 주문
                 for i in range(0, 20):
-                    # market price
                     ret = binance.create_order(
                         symbol=coin,
                         type="MARKET",
@@ -250,7 +245,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                     logger.info('ret: %s', ret)
                     time.sleep(0.05)
 
-                # stop loss
+                # stop loss 주문
                 ret_sl = binance.create_order(
                     symbol=coin,
                     type="STOP_MARKET",
@@ -283,29 +278,25 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 market = binance.market(coin)
 
                 # 레버리지 설정
-                market = binance.market(coin)
-                leverage = 10
-
+                leverage = 10                  
                 resp = binance.fapiPrivate_post_leverage({
                     'symbol': market['id'],
                     'leverage': leverage
                 })
                 
-                # 마진 계산
-                budget = set_budget(ticker)
+                budget = set_budget(ticker)                             # 마진 계산
         
-                # 매수 주문
-                order_amount = (budget/price) * leverage * 0.99
+                order_amount = (budget/price) * leverage * 0.99         # 숏 포지션 
 
-                logger.info('----------short_open() market_order ret-----------')
+                logger.info('----------short_open()-----------')
                 logger.info('Ticker: %s', coin)
                 logger.info('budget(Margin): %s', budget)
                 logger.info('price: %s', price)
                 logger.info('target_short: %s', target_short)
                 logger.info('target_short_sl: %s', target_short_sl)
 
+                # market price
                 for i in range(0, 20):
-                    # market price
                     ret = binance.create_order(
                         symbol=coin,
                         type="MARKET",
