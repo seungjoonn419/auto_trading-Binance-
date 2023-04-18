@@ -13,7 +13,7 @@ from binance.client import Client
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
 # 50 orders pe 10 seconds
-INTERVAL = 0.25                                     # API 호출 간격
+INTERVAL = 0.5                                      # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
@@ -211,14 +211,6 @@ def long_open(coin, price, target_long, target_long_sl, holding):
     매수 조건 확인 및 매수 시도
     '''
     try:
-        budget = set_budget(ticker)                          # 마진 계산
-        logger.info('-----long_open()-----')
-        logger.info('ticker: %s', coin)
-        logger.info('budget(Margin): %s', budget)
-        logger.info('price: %s', price)
-        logger.info('target_open: %s', target_long)
-        logger.info('target_open_sl: %s', target_long_sl)
-
         # 현재 보유하지 않은 상태 
         if holding is False: 
 
@@ -234,22 +226,27 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                     'leverage': leverage
                 })
 
+                # 마진 계산
+                budget = set_budget(ticker)                          
+
                 # 매수 주문
-                order_amount = (budget/price) * leverage * 0.99
+                order_amount = (budget/price) * leverage / 20
 
                 logger.info('----------long_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
+                logger.info('budget(Margin): %s', budget)
+                logger.info('price: %s', price)
+                logger.info('target_open: %s', target_long)
+                logger.info('target_open_sl: %s', target_long_sl)
 
                 # market price
-                for i in range(0,20):
-                    ret = binance.create_order(
-                        symbol=coin,
-                        type="MARKET",
-                        side="buy",
-                        amount=order_amount/20
-                    )
-                    logger.info(ret)
-                    time.sleep(0.05)
+                ret = binance.create_order(
+                    symbol=coin,
+                    type="MARKET",
+                    side="buy",
+                    amount=order_amount
+                )
+                logger.info(ret)
 
                 # stop loss
                 ret_sl = binance.create_order(
@@ -276,13 +273,6 @@ def short_open(coin, price, target_short, target_short_sl, holding):
     매도 조건 확인 및 매도 시도
     '''
     try:
-        budget = set_budget(ticker)                          # 마진 계산
-        logger.info('-----short_open()-----')
-        logger.info('ticker: %s', coin)
-        logger.info('budget(Margin): %s', budget)
-        logger.info('price: %s', price)
-        logger.info('target_short: %s', target_short)
-        logger.info('target_short_sl: %s', target_short_sl)
 
         # 현재 보유하지 않은 상태 
         if holding is False: 
@@ -298,23 +288,28 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                     'symbol': market['id'],
                     'leverage': leverage
                 })
-        
-                # 매수 주문
-                order_amount = (budget/price) * leverage * 0.99
+                
+                # 마진 계산
+                budget = set_budget(ticker)
+
+                # 매도 주문
+                order_amount = (budget/price) * leverage / 20
 
                 logger.info('----------short_open() market_order ret-----------')
                 logger.info('Ticker: %s', coin)
+                logger.info('budget(Margin): %s', budget)
+                logger.info('price: %s', price)
+                logger.info('target_short: %s', target_short)
+                logger.info('target_short_sl: %s', target_short_sl)
 
                 # market price
-                for i in range(0,20):
-                    ret = binance.create_order(
-                        symbol=coin,
-                        type="MARKET",
-                        side="sell",
-                        amount=order_amount/20
-                    )
-                    logger.info(ret)
-                    time.sleep(0.05)
+                ret = binance.create_order(
+                    symbol=coin,
+                    type="MARKET",
+                    side="sell",
+                    amount=order_amount
+                )
+                logger.info('ret: %s', ret)
 
                 # stop loss
                 ret_sl = binance.create_order(
@@ -325,7 +320,7 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                     params={'stopPrice': target_short_sl}
                 )
 
-                logger.info(ret_sl)
+                logger.info('ret_sl: %s', ret_sl)
             else:
                 logger.info('BUY API CALLED: %s', coin)
 
@@ -590,10 +585,14 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, holding)
+        for i in range(0,20):
+            long_open(coin, price, target_long, target_long_sl, holding)
+            time.sleep(0.05)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, holding)
+        for i in range(0,20):
+            short_open(coin, price, target_short, target_short_sl, holding)
+            time.sleep(0.05)
 
     time.sleep(INTERVAL)
