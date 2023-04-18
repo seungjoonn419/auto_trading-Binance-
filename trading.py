@@ -13,7 +13,7 @@ from binance.client import Client
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
 # 50 orders pe 10 seconds
-INTERVAL = 0.25                                     # API 호출 간격
+INTERVAL = 0.5                                      # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
@@ -245,8 +245,10 @@ def long_open(coin, price, target_long, target_long_sl, holding):
 
                 # 남은 margin을 모두 position open
                 # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
-                budget = set_budget(ticker)                         # 마진 계산
-                order_amount = (budget/price) * leverage * 0.99     # 롱 포지션
+                budget = set_budget(ticker)                        # 마진 계산
+                order_amount = (budget/price) * leverage * 0.99    # 롱 포지션
+                logger.info('budget(Margin): %s', budget)
+                logger.info('order_amount: %s', order_amount)
                 ret = binance.create_order(
                     symbol=coin,
                     type="MARKET",
@@ -256,11 +258,13 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 logger.info('ret: %s', ret)
 
                 # stop loss 주문
+                units = get_balance_unit('BTC/USDT:USDT')          # 잔고 조회
+                unit = units.get(ticker, 0)              
                 ret_sl = binance.create_order(
                     symbol=coin,
                     type="STOP_MARKET",
                     side="sell",
-                    amount=order_amount,
+                    amount=unit,
                     params={'stopPrice': target_long_sl}
                 )
                 logger.info('ret_sl: %s', ret_sl)
@@ -325,11 +329,13 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 logger.info('ret: %s', ret)
 
                 # stop loss
+                units = get_balance_unit('BTC/USDT:USDT')               # 잔고 조회
+                unit = units.get(ticker, 0)              
                 ret_sl = binance.create_order(
                     symbol=coin,
                     type="STOP_MARKET",
                     side="buy",
-                    amount=order_amount,
+                    amount=unit,
                     params={'stopPrice': target_short_sl}
                 )
                 logger.info('ret_sl: %s', ret_sl)
@@ -355,7 +361,6 @@ def get_balance_unit(tickers):
 
         for position in positions:
             if float(position['positionAmt']) != 0:
-                #logger.info('position: %s', position)
                 length = len(position['symbol']) - 4
                 unit = position['symbol'][:length] + "/USDT:USDT"
                 units[unit] = float(position['positionAmt'])
