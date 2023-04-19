@@ -206,6 +206,36 @@ def get_portfolio(ticker, price, target_long, target_short):
         logger.error(e)
         return None
 
+
+def create_order_long(order_amount):
+    try:
+        ret = binance.create_order(
+            symbol=coin,
+            type="MARKET",
+            side="buy",
+            amount=order_amount
+        )
+        return ret
+    except Exception as e:
+        logger.info('create_order_short() Exception occur: %s', e)
+        return None
+
+
+def create_order_sell_sl(unit, target_sell_sl):
+    try:
+        ret_sl = binance.create_order(
+            symbol=coin,
+            type="STOP_MARKET",
+            side="sell",
+            amount=unit,
+            params={'stopPrice': target_sell_sl}
+        )
+        return ret_sl
+    except Exception as e:
+        logger.info('create_order_sell_sl() Exception occur: %s', e)
+        return None
+
+
 def long_open(coin, price, target_long, target_long_sl, holding):
     '''
     매수 조건 확인 및 매수 시도
@@ -234,12 +264,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
 
                 # 시장가 주문
                 for i in range(0, 20):
-                    ret = binance.create_order(
-                        symbol=coin,
-                        type="MARKET",
-                        side="buy",
-                        amount=order_amount/20
-                    )
+                    ret = create_order_long(order_amount/20)
                     logger.info('ret: %s', ret)
                     time.sleep(0.05)
 
@@ -249,24 +274,21 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 order_amount = (budget/price) * leverage * 0.99    # 롱 포지션
                 logger.info('budget(Margin): %s', budget)
                 logger.info('order_amount: %s', order_amount)
-                ret = binance.create_order(
-                    symbol=coin,
-                    type="MARKET",
-                    side="buy",
-                    amount=order_amount
-                )
+                ret = create_order_long(order_amount)
+
+                # 포지션 open시에 바이낸스 에러가 날 경우 재요청
+                while ret == None:
+                    ret = create_order_long(order_amount)
                 logger.info('ret: %s', ret)
 
                 # stop loss 주문
                 units = get_balance_unit('BTC/USDT:USDT')          # 잔고 조회
                 unit = units.get(ticker, 0)              
-                ret_sl = binance.create_order(
-                    symbol=coin,
-                    type="STOP_MARKET",
-                    side="sell",
-                    amount=unit,
-                    params={'stopPrice': target_long_sl}
-                )
+                ret_sl = create_order_sell_sl(unit, target_long_sl)
+
+                # sl open시에 바이낸스 에러가 날 경우 재요청
+                while ret_sl == None:
+                    ret_sl = create_order_sell_sl(unit, target_long_sl)
                 logger.info('ret_sl: %s', ret_sl)
 
             else:
@@ -277,6 +299,35 @@ def long_open(coin, price, target_long, target_long_sl, holding):
     except Exception as e:
         logger.error('long_open() Exception occur')
         logger.error(e)
+
+
+def create_order_short(order_amount):
+    try:
+        ret = binance.create_order(
+            symbol=coin,
+            type="MARKET",
+            side="sell",
+            amount=order_amount
+        )
+        return ret
+    except Exception as e:
+        logger.info('create_order_short() Exception occur: %s', e)
+        return None
+
+
+def create_order_buy_sl(unit, target_buy_sl):
+    try:
+        ret_sl = binance.create_order(
+            symbol=coin,
+            type="STOP_MARKET",
+            side="buy",
+            amount=unit,
+            params={'stopPrice': target_buy_sl}
+        )
+        return ret_sl
+    except Exception as e:
+        logger.info('create_order_buy_sl() Exception occur: %s', e)
+        return None
 
 
 def short_open(coin, price, target_short, target_short_sl, holding):
@@ -307,12 +358,7 @@ def short_open(coin, price, target_short, target_short_sl, holding):
 
                 # market price
                 for i in range(0, 20):
-                    ret = binance.create_order(
-                        symbol=coin,
-                        type="MARKET",
-                        side="sell",
-                        amount=order_amount/20
-                    )
+                    ret = create_order_short(order_amount/20)
                     logger.info('ret: %s', ret)
                     time.sleep(0.05)
 
@@ -320,24 +366,21 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
                 budget = set_budget(ticker)                             # 마진 계산
                 order_amount = (budget/price) * leverage * 0.99         # 숏 포지션 
-                ret = binance.create_order(
-                    symbol=coin,
-                    type="MARKET",
-                    side="sell",
-                    amount=order_amount
-                )
+                ret = create_order_short(order_amount)
+
+                # 포지션 open시에 바이낸스 에러가 날 경우 재요청
+                while ret == None:
+                    ret = create_order_short(order_amount)
                 logger.info('ret: %s', ret)
 
                 # stop loss
                 units = get_balance_unit('BTC/USDT:USDT')               # 잔고 조회
                 unit = units.get(ticker, 0)              
-                ret_sl = binance.create_order(
-                    symbol=coin,
-                    type="STOP_MARKET",
-                    side="buy",
-                    amount=unit,
-                    params={'stopPrice': target_short_sl}
-                )
+                ret_sl = create_order_buy_sl(unit)
+
+                # sl open시에 바이낸스 에러가 날 경우 재요청
+                while ret_sl == None:
+                    ret_sl = create_order_buy_sl(unit, target_short_sl)
                 logger.info('ret_sl: %s', ret_sl)
 
             else:
