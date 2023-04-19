@@ -241,7 +241,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
     매수 조건 확인 및 매수 시도
     '''
     try:
-        if holding is False:                                        # 현재 보유하지 않은 상태
+        if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
                 # 레버리지 설정
                 market = binance.market(coin)
@@ -251,8 +251,9 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                     'leverage': leverage
                 })
 
-                budget = set_budget(ticker)                         # 마진 계산
-                order_amount = (budget/price) * leverage * 0.99     # 롱 포지션
+                budget = set_budget(ticker)                             # 마진 계산
+                fee = 0.0004                                            # 수수료
+                order_amount = (budget/price) * leverage * (1 - fee)    # 롱 포지션 
 
                 logger.info('----------long_open()-----------')
                 logger.info('Ticker: %s', coin)
@@ -270,8 +271,8 @@ def long_open(coin, price, target_long, target_long_sl, holding):
 
                 # 남은 margin을 모두 position open
                 # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
-                budget = set_budget(ticker)                        # 마진 계산
-                order_amount = (budget/price) * leverage * 0.99    # 롱 포지션
+                budget = set_budget(ticker)                             # 마진 계산
+                order_amount = (budget/price) * leverage * (1 - fee)    # 롱 포지션
                 logger.info('budget(Margin): %s', budget)
                 logger.info('order_amount: %s', order_amount)
                 ret = create_order_long(order_amount)
@@ -282,7 +283,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 logger.info('ret: %s', ret)
 
                 # stop loss 주문
-                units = get_balance_unit('BTC/USDT:USDT')          # 잔고 조회
+                units = get_balance_unit('BTC/USDT:USDT')               # 잔고 조회
                 unit = units.get(ticker, 0)              
                 ret_sl = create_order_sell_sl(unit, target_long_sl)
 
@@ -346,7 +347,8 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 })
                 
                 budget = set_budget(ticker)                             # 마진 계산
-                order_amount = (budget/price) * leverage * 0.99         # 숏 포지션 
+                fee = 0.0004                                            # 수수료
+                order_amount = (budget/price) * leverage * (1 - fee)    # 숏 포지션 
 
                 logger.info('----------short_open()-----------')
                 logger.info('Ticker: %s', coin)
@@ -365,7 +367,7 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 # 남은 margin을 모두 position open
                 # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
                 budget = set_budget(ticker)                             # 마진 계산
-                order_amount = (budget/price) * leverage * 0.99         # 숏 포지션 
+                order_amount = (budget/price) * leverage * (1 - fee)    # 숏 포지션 
                 ret = create_order_short(order_amount)
 
                 # 포지션 open시에 바이낸스 에러가 날 경우 재요청
