@@ -392,6 +392,7 @@ def close_position(ticker):
         if unit > 0:
             if DEBUG is False:
                 logger.info('----------close long position ret-----------')
+                # 20번에 나누어서 시장가로 포지션을 Close
                 for i in range(0,20):
                     ret = binance.create_market_sell_order(
                         symbol=ticker,
@@ -399,6 +400,17 @@ def close_position(ticker):
                     )
                     logger.info(ret)
                     time.sleep(0.05)
+
+                # 남은 포지션을 추가로 확인하여 포지션을 Close
+                units = get_balance_unit(ticker)
+                unit = units.get(ticker, 0)     
+                if unit > 0:
+                    ret = binance.create_market_sell_order(
+                        symbol=ticker,
+                        amount=unit
+                    )
+                    logger.info(ret)
+
 
             else:
                 logger.info('Long position close(): %s', ticker)
@@ -413,6 +425,16 @@ def close_position(ticker):
                     )
                     logger.info(ret)
                     time.sleep(0.05)
+
+                # 남은 포지션을 추가로 확인하여 포지션을 Close
+                units = get_balance_unit(ticker)
+                unit = units.get(ticker, 0)     
+                if unit < 0:
+                    ret = binance.create_market_sell_order(
+                        symbol=ticker,
+                        amount=unit
+                    )
+                    logger.info(ret)
 
             else:
                 logger.info('Short position close(): %s', ticker)
