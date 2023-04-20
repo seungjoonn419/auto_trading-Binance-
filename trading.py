@@ -19,6 +19,7 @@ COIN_NUM = 1                                        # 분산 투자 코인 개�
 LARRY_K = 0.5
 TRAILLING_STOP_GAP = 0.05                           # 최고점 대비 15% 하락시 매도
 RESET_TIME = 20
+TICKER = 'BTC/USDT:USDT'
 
 # logger instance 생성
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ def get_df(ticker):
 def set_target(ticker):
     '''
     각 코인에 대한 목표가 저장
-    :param ticker: 티커, 'BTC'
+    :param ticker: 티커, 
     '''
     try:
         df = get_df(ticker)
@@ -283,7 +284,7 @@ def long_open(coin, price, target_long, target_long_sl, holding):
                 logger.info('ret: %s', ret)
 
                 # stop loss 주문
-                units = get_balance_unit('BTC/USDT:USDT')               # 잔고 조회
+                units = get_balance_unit(TICKER)               # 잔고 조회
                 unit = units.get(ticker, 0)              
                 ret_sl = create_order_sell_sl(unit, target_long_sl)
 
@@ -376,7 +377,7 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 logger.info('ret: %s', ret)
 
                 # stop loss
-                units = get_balance_unit('BTC/USDT:USDT')               # 잔고 조회
+                units = get_balance_unit(TICKER)               # 잔고 조회
                 unit = units.get(ticker, 0)              
                 ret_sl = create_order_buy_sl(unit)
 
@@ -578,35 +579,6 @@ def get_filtered(ticker):
         return False
 
 
-def get_tickers():
-    '''
-    선물 종목만 조회
-    비트코인과 이더리움은 제외('거래량 * 전일 종가'의 비중이 너무 커서 다른 종목의 매수 비중이 작아진다)
-    return: 비트코인과 이더리움을 제외한 선물 종목
-    '''
-    try:
-        markets = binance.load_markets()
-        tickers = list()
-        for sym in markets:
-            if sym[-5:] == ':USDT' and sym[:8] != 'BTC/USDT' and sym[:8] != 'ETH/USDT':
-                # Set MarginType Isolated
-                length = len(sym) - 10
-                unit = sym[:length] + "USDT"
-                set_marginType(unit)
-                
-                # 전일 거래량이 존재하는지 필터링
-                filtered = get_filtered(sym)
-
-                if filtered == True:
-                    tickers.append(sym)
-                else:
-                    logger.info('Ticker: %s Not in tickers', sym) 
-
-        return tickers
-    except Exception as e:
-        logger.error('get_tickers() Exception error')
-        logger.error(e)
-
 def set_marginType(ticker):
     '''
     마진을 Isolated로 설정
@@ -626,7 +598,7 @@ now = datetime.datetime.now()                                            # 현�
 sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
 setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
 
-ticker = "BTC/USDT:USDT"
+ticker = TICKER 
 
 # 목표가 계산
 close, target_long, target_short, target_long_sl, target_short_sl = set_target(ticker)
@@ -638,6 +610,13 @@ logger.info('Short sl Target: %s', target_short_sl)
 while True:
 
     now = datetime.datetime.now()
+
+    # 코인 포트폴리오 정보를 지속적으로 갱신
+    with open('target_list.json') as target_f :
+        target_file = json.load(target_f)
+        TICKER = target_file['target_list']
+
+    logger.info('Target Ticker: %s', TICKER)
 
     # 새로운 거래일에 대한 데이터 셋업 (09:01:00 ~ 09:01:20)
     # 금일, 익일 포함
