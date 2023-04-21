@@ -7,8 +7,6 @@ import pandas as pd
 import json
 import ccxt
 import pprint
-from binance.client import Client
-import slack_bot
 
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
@@ -58,10 +56,6 @@ with open("config.txt") as f:
         }
     })
 
-# Load Slcak Token
-with open("slack_token.txt") as f:
-    lines = f.readlines()
-    token = lines[0].strip()
 
 def make_sell_times(now):
     '''
