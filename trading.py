@@ -8,7 +8,7 @@ import json
 import ccxt
 import pprint
 from binance.client import Client
-
+import slack_bot
 
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
@@ -58,6 +58,10 @@ with open("config.txt") as f:
         }
     })
 
+# Load Slcak Token
+with open("slack_token.txt") as f:
+    lines = f.readlines()
+    token = lines[0].strip()
 
 def make_sell_times(now):
     '''
@@ -237,13 +241,15 @@ def create_order_sell_sl(unit, target_sell_sl):
         return None
 
 
-def long_open(coin, price, target_long, target_long_sl, holding):
+def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
+                post_message(slack, channel_id, coin, "Long Open")
+
                 # 레버리지 설정
                 market = binance.market(coin)
                 leverage = 10
@@ -254,7 +260,8 @@ def long_open(coin, price, target_long, target_long_sl, holding):
 
                 budget = set_budget(ticker)                             # 마진 계산
                 fee = 0.0004                                            # 수수료
-                order_amount = (budget/price) * leverage * (1 - fee)    # 롱 포지션 
+                #order_amount = (budget/price) * leverage * (1 - fee)    # 롱 포지션 
+                order_amount = (budget/price) * 0.1    # 롱 포지션 
 
                 logger.info('----------long_open()-----------')
                 logger.info('Ticker: %s', coin)
@@ -332,13 +339,15 @@ def create_order_buy_sl(unit, target_buy_sl):
         return None
 
 
-def short_open(coin, price, target_short, target_short_sl, holding):
+def short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id):
     '''
     매도 조건 확인 및 매도 시도
     '''
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
+                post_message(slack, channel_id, coin, "Short Open")
+
                 # 레버리지 설정
                 market = binance.market(coin)
                 leverage = 10
@@ -349,7 +358,8 @@ def short_open(coin, price, target_short, target_short_sl, holding):
                 
                 budget = set_budget(ticker)                             # 마진 계산
                 fee = 0.0004                                            # 수수료
-                order_amount = (budget/price) * leverage * (1 - fee)    # 숏 포지션 
+                #order_amount = (budget/price) * leverage * (1 - fee)    # 숏 포지션 
+                order_amount = (budget/price) * 0.1    # 숏 포지션 
 
                 logger.info('----------short_open()-----------')
                 logger.info('Ticker: %s', coin)
@@ -590,6 +600,40 @@ def set_marginType(ticker):
         logger.info('set_marginType() Exception occur')
         logger.info(e)
 
+# USDT만 조회
+def get_tickers():
+    try:
+        markets = binance.load_markets()
+        tickers = list()
+        for sym in markets:
+            if sym[-5:] == ':USDT':
+                df = get_df(sym)
+                if df.iloc[-2]['volume'] > 0:
+                    tickers.append(sym)
+
+        return tickers
+    except Exception as e:
+        logger.error('get_tickers() Exception error')
+        logger.error(e)
+
+# Slack 초기화
+def slack_init():
+    try:
+        channel_name = "자동매매"
+        slack = slack_bot.SlackAPI(token)
+        channel_id = slack.get_channel_id(channel_name)
+        return slack, channel_id
+    except Exception as e:
+        logger.info('slack_init() Exception occur: %s', e)
+
+# 슬랙 메시지 전송
+def post_message(slack, channel_id, coin, msg):
+    try:
+        message = coin + ': ' + msg
+        slack.post_message(channel_id, message)
+    except Exception as e:
+        logger.info('post_message() Exception occur: %s', e)
+
 #----------------------------------------------------------------------------------------------------------------------
 # 매매 알고리즘 시작
 #---------------------------------------------------------------------------------------------------------------------
@@ -607,11 +651,17 @@ logger.info('Long sl Target: %s', target_long_sl)
 logger.info('Short Target: %s', target_short)
 logger.info('Short sl Target: %s', target_short_sl)
 
+# 티커 리스트
+ticker_list = get_tickers()
+logger.info('ticker_list: %s', ticker_list)
+
+slack, channel_id = slack_init()                                         # Slack Init
+
 while True:
 
     now = datetime.datetime.now()
 
-    # 코인 포트폴리오 정보를 지속적으로 갱신
+    # 코인 포트폴리오 정보를 갱신
     with open('target_list.json') as target_f :
         target_file = json.load(target_f)
         TICKER = target_file['target_list']
@@ -624,6 +674,10 @@ while True:
         logger.info('New Date Set Up Start')
 
         close_position(ticker)                                           # 포지션 정리
+        
+        # 티커 리스트
+        ticker_list = get_tickers()
+        logger.info('ticker_list: %s', ticker_list)
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
@@ -649,10 +703,10 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, holding)
+        long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, holding)
+        short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
 
     time.sleep(INTERVAL)
