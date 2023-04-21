@@ -8,6 +8,7 @@ import json
 import ccxt
 import pprint
 from binance.client import Client
+import slack_bot
 
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
@@ -56,6 +57,10 @@ with open("config.txt") as f:
         }
     })
 
+# Load Slcak Token
+with open("slack_token.txt") as f:
+    lines = f.readlines()
+    token = lines[0].strip()
 
 def make_sell_times(now):
     '''
@@ -235,13 +240,15 @@ def create_order_sell_sl(unit, target_sell_sl):
         return None
 
 
-def long_open(coin, price, target_long, target_long_sl, holding):
+def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
+                post_message(slack, channel_id, coin, "Long Open")      # Slack message 전송
+
                 # 레버리지 설정
                 market = binance.market(coin)
                 leverage = 10
@@ -330,13 +337,15 @@ def create_order_buy_sl(unit, target_buy_sl):
         return None
 
 
-def short_open(coin, price, target_short, target_short_sl, holding):
+def short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id):
     '''
     매도 조건 확인 및 매도 시도
     '''
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
+                post_message(slack, channel_id, coin, "Short Open")     # Slack message 전송
+
                 # 레버리지 설정
                 market = binance.market(coin)
                 leverage = 10
@@ -588,6 +597,24 @@ def set_marginType(ticker):
         logger.info('set_marginType() Exception occur')
         logger.info(e)
 
+# Slack 초기화
+def slack_init():
+    try:
+        channel_name = "자동매매"
+        slack = slack_bot.SlackAPI(token)
+        channel_id = slack.get_channel_id(channel_name)
+        return slack, channel_id
+    except Exception as e:
+        logger.info('slack_init() Exception occur: %s', e)
+
+# 슬랙 메시지 전송
+def post_message(slack, channel_id, coin, msg):
+    try:
+        message = coin + ': ' + msg
+        slack.post_message(channel_id, message)
+    except Exception as e:
+        logger.info('post_message() Exception occur: %s', e)
+
 #----------------------------------------------------------------------------------------------------------------------
 # 매매 알고리즘 시작
 #---------------------------------------------------------------------------------------------------------------------
@@ -604,6 +631,8 @@ logger.info('Long Target: %s', target_long)
 logger.info('Long sl Target: %s', target_long_sl)
 logger.info('Short Target: %s', target_short)
 logger.info('Short sl Target: %s', target_short_sl)
+
+slack, channel_id = slack_init()
 
 while True:
 
@@ -647,10 +676,10 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, holding)
+        long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, holding)
+        short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
 
     time.sleep(INTERVAL)

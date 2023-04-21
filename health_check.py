@@ -43,7 +43,7 @@ def checkIsProcessRunning():
     return False
 
 def runProcess():
-    subprocess.run(["/home/ec2-user/start_trading.sh", "arguments"], shell=True)
+    subprocess.run(["/home/ubuntu/start_trading.sh", "arguments"], shell=True)
     logger.info('프로세스를 재기동하였습니다.')
 
 while True:
