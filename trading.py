@@ -241,14 +241,13 @@ def create_order_sell_sl(unit, target_sell_sl):
         return None
 
 
-def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id):
+def long_open(coin, price, target_long, target_long_sl, holding):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
-                post_message(slack, channel_id, coin, "Long Open")
 
                 # 레버리지 설정
                 market = binance.market(coin)
@@ -339,14 +338,13 @@ def create_order_buy_sl(unit, target_buy_sl):
         return None
 
 
-def short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id):
+def short_open(coin, price, target_short, target_short_sl, holding):
     '''
     매도 조건 확인 및 매도 시도
     '''
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
-                post_message(slack, channel_id, coin, "Short Open")
 
                 # 레버리지 설정
                 market = binance.market(coin)
@@ -651,22 +649,9 @@ logger.info('Long sl Target: %s', target_long_sl)
 logger.info('Short Target: %s', target_short)
 logger.info('Short sl Target: %s', target_short_sl)
 
-# 티커 리스트
-ticker_list = get_tickers()
-logger.info('ticker_list: %s', ticker_list)
-
-slack, channel_id = slack_init()                                         # Slack Init
-
 while True:
 
     now = datetime.datetime.now()
-
-    # 코인 포트폴리오 정보를 갱신
-    with open('target_list.json') as target_f :
-        target_file = json.load(target_f)
-        TICKER = target_file['target_list']
-
-    logger.info('Target Ticker: %s', TICKER)
 
     # 새로운 거래일에 대한 데이터 셋업 (09:01:00 ~ 09:01:20)
     # 금일, 익일 포함
@@ -674,10 +659,6 @@ while True:
         logger.info('New Date Set Up Start')
 
         close_position(ticker)                                           # 포지션 정리
-        
-        # 티커 리스트
-        ticker_list = get_tickers()
-        logger.info('ticker_list: %s', ticker_list)
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
@@ -703,10 +684,10 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
+        long_open(coin, price, target_long, target_long_sl, holding)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
+        short_open(coin, price, target_short, target_short_sl, holding)
 
     time.sleep(INTERVAL)
