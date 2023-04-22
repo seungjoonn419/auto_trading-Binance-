@@ -18,7 +18,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 RESET_TIME = 20
-TICKER = 'BTC/USDT:USDT'
+TICKER = 'ETH/USDT:USDT'
 
 # logger instance 생성
 logger = logging.getLogger(__name__)
@@ -623,10 +623,8 @@ now = datetime.datetime.now()                                            # 현�
 sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
 setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
 
-ticker = TICKER 
-
 # 목표가 계산
-close, target_long, target_short, target_long_sl, target_short_sl = set_target(ticker)
+close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
 logger.info('Long Target: %s', target_long)
 logger.info('Long sl Target: %s', target_long_sl)
 logger.info('Short Target: %s', target_short)
@@ -638,24 +636,17 @@ while True:
 
     now = datetime.datetime.now()
 
-    # 코인 포트폴리오 정보를 지속적으로 갱신
-    with open('target_list.json') as target_f :
-        target_file = json.load(target_f)
-        TICKER = target_file['target_list']
-
-    logger.info('Target Ticker: %s', TICKER)
-
     # 새로운 거래일에 대한 데이터 셋업 (09:01:00 ~ 09:01:20)
     # 금일, 익일 포함
     if (sell_time1 < now < sell_time2) or (setup_time1 < now < setup_time2):
         logger.info('New Date Set Up Start')
 
-        close_position(ticker)                                           # 포지션 정리
+        close_position(TICKER)                                           # 포지션 정리
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
         # 목표가 계산
-        close, target_long, target_short, target_long_sl, target_short_sl = set_target(ticker)
+        close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
 
         logger.info('Long Target: %s', target_long)
         logger.info('Long sl Target: %s', target_long_sl)
@@ -665,12 +656,12 @@ while True:
         logger.info('New Date Set Up End')
         time.sleep(20)
 
-    price = get_cur_price(ticker)                                        # 현재가 계산
+    price = get_cur_price(TICKER)                                        # 현재가 계산
 
-    holding = set_holding(ticker)                                        # 현재 포지션 유무 확인
+    holding = set_holding(TICKER)                                        # 현재 포지션 유무 확인
     logger.info('Is holding: %s', holding)
 
-    portfolio_long, portfolio_short = get_portfolio(ticker, price, target_long, target_short)       
+    portfolio_long, portfolio_short = get_portfolio(TICKER, price, target_long, target_short)       
     logger.info('portfolio_long: %s', portfolio_long)
     logger.info('portfolio_short: %s', portfolio_short)
 
