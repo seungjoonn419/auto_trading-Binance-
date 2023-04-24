@@ -283,10 +283,6 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
                 logger.info('budget(Margin): %s', budget)
                 logger.info('order_amount: %s', order_amount)
                 ret = create_order_long(ticker, order_amount)
-
-                # 포지션 open시에 바이낸스 에러가 날 경우 재요청
-                while ret == None:
-                    ret = create_order_long(ticker, order_amount)
                 logger.info('ret: %s', ret)
 
                 # stop loss 주문
@@ -375,10 +371,6 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                 budget = set_budget(ticker)                             # 마진 계산
                 order_amount = (budget/price) * leverage * (1 - fee)    # 숏 포지션 
                 ret = create_order_short(ticker, order_amount)
-
-                # 포지션 open시에 바이낸스 에러가 날 경우 재요청
-                while ret == None:
-                    ret = create_order_short(ticker, order_amount)
                 logger.info('ret: %s', ret)
 
                 # stop loss
