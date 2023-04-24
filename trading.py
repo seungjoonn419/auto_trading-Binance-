@@ -18,7 +18,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 RESET_TIME = 20
-TICKER = 'ETH/USDT:USDT'
+TICKER = 'SXP/USDT:USDT'
 
 # logger instance 생성
 logger = logging.getLogger(__name__)
@@ -290,13 +290,10 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
                 logger.info('ret: %s', ret)
 
                 # stop loss 주문
+                time.sleep(1)
                 units = get_balance_unit(TICKER)               # 잔고 조회
                 unit = units.get(ticker, 0)              
                 ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
-
-                # sl open시에 바이낸스 에러가 날 경우 재요청
-                while ret_sl == None:
-                    ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
                 logger.info('ret_sl: %s', ret_sl)
 
             else:
@@ -385,13 +382,10 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                 logger.info('ret: %s', ret)
 
                 # stop loss
+                time.sleep(1)
                 units = get_balance_unit(ticker)                           # 잔고 조회
                 unit = units.get(ticker, 0)              
                 ret_sl = create_order_buy_sl(ticker, unit, target_short_sl)
-
-                # sl open시에 바이낸스 에러가 날 경우 재요청
-                while ret_sl == None:
-                    ret_sl = create_order_buy_sl(ticker, unit, target_short_sl)
                 logger.info('ret_sl: %s', ret_sl)
 
             else:
