@@ -12,8 +12,7 @@ import slack_bot
 
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
-# 50 orders pe 10 seconds
-INTERVAL = 0.5                                      # API 호출 간격
+INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
@@ -61,6 +60,25 @@ with open("config.txt") as f:
 with open("slack_token.txt") as f:
     lines = f.readlines()
     token = lines[0].strip()
+
+# Slack 초기화
+def slack_init():
+    try:
+        channel_name = "자동매매"
+        slack = slack_bot.SlackAPI(token)
+        channel_id = slack.get_channel_id(channel_name)
+        return slack, channel_id
+    except Exception as e:
+        logger.info('slack_init() Exception occur: %s', e)
+
+# 슬랙 메시지 전송
+def post_message(slack, channel_id, ticker, msg):
+    try:
+        message = ticker + ': ' + msg
+        slack.post_message(channel_id, message)
+    except Exception as e:
+        logger.info('post_message() Exception occur: %s', e)
+
 
 def make_sell_times(now):
     '''
@@ -348,7 +366,7 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                     'leverage': leverage
                 })
                 
-                budget = set_budget(ticker)                               # 마진 계산
+                budget = set_budget(ticker)                             # 마진 계산
                 fee = 0.0004                                            # 수수료
                 order_amount = (budget/price) * leverage * (1 - fee)    # 숏 포지션 
 
@@ -584,23 +602,6 @@ def set_marginType(ticker):
         logger.info('set_marginType() Exception occur')
         logger.info(e)
 
-# Slack 초기화
-def slack_init():
-    try:
-        channel_name = "자동매매"
-        slack = slack_bot.SlackAPI(token)
-        channel_id = slack.get_channel_id(channel_name)
-        return slack, channel_id
-    except Exception as e:
-        logger.info('slack_init() Exception occur: %s', e)
-
-# 슬랙 메시지 전송
-def post_message(slack, channel_id, ticker, msg):
-    try:
-        message = ticker + ': ' + msg
-        slack.post_message(channel_id, message)
-    except Exception as e:
-        logger.info('post_message() Exception occur: %s', e)
 
 #----------------------------------------------------------------------------------------------------------------------
 # 매매 알고리즘 시작
