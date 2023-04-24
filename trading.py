@@ -645,7 +645,7 @@ while True:
         time.sleep(20)
 
     price = get_cur_price(TICKER)                                        # 현재가 계산
-    #logger.info('%s Price: %s', TICKER, price)
+    logger.info('%s Price: %s', TICKER, price)
 
     holding = set_holding(TICKER)                                        # 현재 포지션 유무 확인
     logger.info('Is holding: %s', holding)
