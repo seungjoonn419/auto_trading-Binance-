@@ -269,8 +269,7 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
 
                 # 레버리지 설정
                 market = binance.market(ticker)
-                #leverage = 10
-                leverage = 1
+                leverage = 10
                 resp = binance.fapiPrivate_post_leverage({
                     'symbol': market['id'],
                     'leverage': leverage
@@ -395,7 +394,7 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                 time.sleep(1)
                 units = get_balance_unit(ticker)                           # 잔고 조회
                 unit = units.get(ticker, 0)              
-                ret_sl = create_order_buy_sl(ticker, unit, target_short_sl)
+                ret_sl = create_order_buy_sl(ticker, abs(unit), target_short_sl)
                 logger.info('ret_sl: %s', ret_sl)
 
             else:
