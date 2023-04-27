@@ -17,7 +17,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 BUDGET = 400                                        # 투자 금액(USDT)
-TICKER = 'BTC/USDT:USDT'
+TICKER = 'ETH/USDT:USDT'
 
 
 # logger instance 생성
@@ -266,8 +266,6 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
     try:
         if holding is False:                                              # 현재 보유하지 않은 상태
             if DEBUG is False:
-                post_message(slack, channel_id, ticker, "Long Open")      # Slack message 전송
-
                 # 레버리지 설정
                 market = binance.market(ticker)
                 leverage = 20
@@ -277,6 +275,7 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
                 })
 
                 order_amount = (BUDGET/price) * leverage                  # 롱 포지션 
+                budget = get_budget()
 
                 logger.info('----------long_open()-----------')
                 logger.info('Ticker: %s', ticker)
@@ -284,6 +283,13 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
                 logger.info('target_open: %s', target_long)
                 logger.info('target_open_sl: %s', target_long_sl)
                 logger.info('order_amount: %s', order_amount)
+
+                # Slack message 전송
+                post_message(slack, channel_id, ticker, "Long Open")     
+                post_message(slack, channel_id, "price", price)   
+                post_message(slack, channel_id, "target price", target_long)   
+                post_message(slack, channel_id, "Stop Loss Price", target_long_sl)   
+                post_message(slack, channel_id, "Budget", budget)   
 
                 # 시장가 주문
                 for i in range(0, 20):
@@ -343,8 +349,6 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
-                post_message(slack, channel_id, ticker, "Short Open")   # Slack message 전송
-
                 # 레버리지 설정
                 market = binance.market(ticker)
                 leverage = 20
@@ -354,6 +358,7 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                 })
                 
                 order_amount = (BUDGET/price) * leverage                # 숏 포지션 
+                budget = get_budget()
 
                 logger.info('----------short_open()-----------')
                 logger.info('Ticker: %s', ticker)
@@ -361,6 +366,13 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                 logger.info('target_short: %s', target_short)
                 logger.info('target_short_sl: %s', target_short_sl)
                 logger.info('order_amount: %s', order_amount)
+
+                # Slack message 전송
+                post_message(slack, channel_id, ticker, "Short Open")     
+                post_message(slack, channel_id, "price", price)   
+                post_message(slack, channel_id, "target price", target_short)   
+                post_message(slack, channel_id, "Stop Loss Price", target_short_sl)   
+                post_message(slack, channel_id, "Budget", budget)   
 
                 # market price
                 for i in range(0, 20):
@@ -483,7 +495,7 @@ def close_position(ticker):
         logger.error(e)
 
 
-def set_budget(ticker):
+def get_budget():
     '''
     투자 금액 계산
     :return: 원화잔고
