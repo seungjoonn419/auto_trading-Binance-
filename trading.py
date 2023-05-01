@@ -17,7 +17,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 BUDGET = 400                                        # 투자 금액(USDT)
-TICKER = 'ETH/USDT:USDT'
+TICKER = 'BTC/USDT:USDT'
 
 
 # logger instance 생성
@@ -286,10 +286,10 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
 
                 # Slack message 전송
                 post_message(slack, channel_id, ticker, "Long Open")     
-                post_message(slack, channel_id, "price", price)   
-                post_message(slack, channel_id, "target price", target_long)   
-                post_message(slack, channel_id, "Stop Loss Price", target_long_sl)   
-                post_message(slack, channel_id, "Budget", budget)   
+                post_message(slack, channel_id, "price", str(price))   
+                post_message(slack, channel_id, "target price", str(target_long))   
+                post_message(slack, channel_id, "Stop Loss Price", str(target_long_sl))   
+                post_message(slack, channel_id, "Budget", str(budget))   
 
                 # 시장가 주문
                 for i in range(0, 20):
@@ -369,10 +369,10 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
 
                 # Slack message 전송
                 post_message(slack, channel_id, ticker, "Short Open")     
-                post_message(slack, channel_id, "price", price)   
-                post_message(slack, channel_id, "target price", target_short)   
-                post_message(slack, channel_id, "Stop Loss Price", target_short_sl)   
-                post_message(slack, channel_id, "Budget", budget)   
+                post_message(slack, channel_id, "price", str(price))   
+                post_message(slack, channel_id, "target price", str(target_short))   
+                post_message(slack, channel_id, "Stop Loss Price", str(target_short_sl))   
+                post_message(slack, channel_id, "Budget", str(budget))   
 
                 # market price
                 for i in range(0, 20):
@@ -606,7 +606,14 @@ logger.info('Long sl Target: %s', target_long_sl)
 logger.info('Short Target: %s', target_short)
 logger.info('Short sl Target: %s', target_short_sl)
 
+budget = get_budget()
+
 slack, channel_id = slack_init()
+post_message(slack, channel_id, "Budget", str(budget))   
+post_message(slack, channel_id, "Long Target", str(target_long))
+post_message(slack, channel_id, "Long SL Target", str(target_long_sl))
+post_message(slack, channel_id, "Short Target", str(target_short))   
+post_message(slack, channel_id, "Short SL Target", str(target_short_sl))   
 
 while True:
 
@@ -628,6 +635,14 @@ while True:
         logger.info('Long sl Target: %s', target_long_sl)
         logger.info('Short Target: %s', target_short)
         logger.info('Short sl Target: %s', target_short_sl)
+
+        budget = get_budget()
+
+        post_message(slack, channel_id, "Budget", str(budget))   
+        post_message(slack, channel_id, "Long Target", str(target_long))
+        post_message(slack, channel_id, "Long SL Target", str(target_long_sl))
+        post_message(slack, channel_id, "Short Target", str(target_short))   
+        post_message(slack, channel_id, "Short SL Target", str(target_short_sl))   
 
         logger.info('New Date Set Up End')
         time.sleep(20)
