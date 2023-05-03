@@ -8,6 +8,7 @@ import json
 import ccxt
 import pprint
 from binance.client import Client
+import slack_bot
 
 # 바이낸스 API 호출 제한
 # 1,200 request weight per minute
@@ -55,6 +56,29 @@ with open("config.txt") as f:
             'defaultType': 'future'
         }
     })
+
+# Load Slcak Token
+with open("slack_token.txt") as f:
+    lines = f.readlines()
+    token = lines[0].strip()
+
+# Slack 초기화
+def slack_init():
+    try:
+        channel_name = "자동매매"
+        slack = slack_bot.SlackAPI(token)
+        channel_id = slack.get_channel_id(channel_name)
+        return slack, channel_id
+    except Exception as e:
+        logger.info('slack_init() Exception occur: %s', e)
+
+# 슬랙 메시지 전송
+def post_message(slack, channel_id, ticker, msg):
+    try:
+        message = ticker + ': ' + msg
+        slack.post_message(channel_id, message)
+    except Exception as e:
+        logger.info('post_message() Exception occur: %s', e)
 
 
 def make_sell_times(now):
@@ -235,7 +259,7 @@ def create_order_sell_sl(ticker, unit, target_sell_sl):
         return None
 
 
-def long_open(ticker, price, target_long, target_long_sl, holding):
+def long_open(ticker, price, target_long, target_long_sl, holding, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
@@ -259,6 +283,13 @@ def long_open(ticker, price, target_long, target_long_sl, holding):
                 logger.info('target_open: %s', target_long)
                 logger.info('target_open_sl: %s', target_long_sl)
                 logger.info('order_amount: %s', order_amount)
+
+                # Slack message 전송
+                post_message(slack, channel_id, ticker, "Long Open")     
+                post_message(slack, channel_id, "price", str(price))   
+                post_message(slack, channel_id, "target price", str(target_long))   
+                post_message(slack, channel_id, "Stop Loss Price", str(target_long_sl))   
+                post_message(slack, channel_id, "Budget", str(budget)) 
 
                 # 시장가 주문
                 for i in range(0, 20):
@@ -311,7 +342,7 @@ def create_order_buy_sl(ticker, unit, target_buy_sl):
         return None
 
 
-def short_open(ticker, price, target_short, target_short_sl, holding):
+def short_open(ticker, price, target_short, target_short_sl, holding, slack, channel_id):
     '''
     매도 조건 확인 및 매도 시도
     '''
@@ -335,6 +366,13 @@ def short_open(ticker, price, target_short, target_short_sl, holding):
                 logger.info('target_short: %s', target_short)
                 logger.info('target_short_sl: %s', target_short_sl)
                 logger.info('order_amount: %s', order_amount)
+
+                # Slack message 전송
+                post_message(slack, channel_id, ticker, "Short Open")
+                post_message(slack, channel_id, "price", str(price))
+                post_message(slack, channel_id, "target price", str(target_short))
+                post_message(slack, channel_id, "Stop Loss Price", str(target_short_sl))
+                post_message(slack, channel_id, "Budget", str(budget))
 
                 # market price
                 for i in range(0, 20):
@@ -567,6 +605,13 @@ logger.info('Short sl Target: %s', target_short_sl)
 
 budget = get_budget()
 
+slack, channel_id = slack_init()
+post_message(slack, channel_id, "Budget", str(budget))   
+post_message(slack, channel_id, "Long Target", str(target_long))
+post_message(slack, channel_id, "Long SL Target", str(target_long_sl))
+post_message(slack, channel_id, "Short Target", str(target_short))   
+post_message(slack, channel_id, "Short SL Target", str(target_short_sl))   
+
 while True:
 
     now = datetime.datetime.now()
@@ -586,6 +631,11 @@ while True:
         logger.info('Short sl Target: %s', target_short_sl)
 
         budget = get_budget()
+        post_message(slack, channel_id, "Budget", str(budget))
+        post_message(slack, channel_id, "Long Target", str(target_long))
+        post_message(slack, channel_id, "Long SL Target", str(target_long_sl))
+        post_message(slack, channel_id, "Short Target", str(target_short))
+        post_message(slack, channel_id, "Short SL Target", str(target_short_sl))
 
         logger.info('New Hour Set Up End')
         time.sleep(20)
@@ -602,10 +652,10 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, holding)
+        long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, holding)
+        short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
 
     time.sleep(INTERVAL)
