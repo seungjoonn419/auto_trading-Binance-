@@ -16,7 +16,7 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-BUDGET = 120                                        # 투자 금액(USDT)
+BUDGET = 400                                        # 투자 금액(USDT)
 TICKER = 'BTC/USDT:USDT'
 
 
@@ -136,7 +136,7 @@ def get_df(ticker):
     try:
         btc = binance.fetch_ohlcv(
             symbol=ticker, 
-            timeframe='1h', 
+            timeframe='1d', 
             since=None, 
             limit=10)
 
@@ -158,25 +158,25 @@ def set_target(ticker):
     try:
         df = get_df(ticker)
 
-        last = df.iloc[-2]
-        current_open = last['close']
-        last_high = last['high']
-        last_low = last['low']
-        target_long = current_open + (last_high - last_low) * LARRY_K
-        target_short = current_open - (last_high - last_low) * LARRY_K
+        yesterday = df.iloc[-2]
+        today_open = yesterday['close']
+        yesterday_high = yesterday['high']
+        yesterday_low = yesterday['low']
+        target_long = today_open + (yesterday_high - yesterday_low) * LARRY_K
+        target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
 
         # Stop Limitt 0.5%로 지정
         target_long_sl = target_long * 0.995
         target_short_sl = target_short * 1.005
 
-        return current_open, target_long, target_short, target_long_sl, target_short_sl
+        return today_open, target_long, target_short, target_long_sl, target_short_sl
     except Exception as e:
         logger.error('cal_target Exception occur')
         logger.error('ticker: %s', ticker)
         logger.error(e)
 
-        # 절대 매수를 하지 못 하도록
-        return float('inf'), float('inf')
+        # 절대 매수를 하지 못 하도록 높은 값을 설정
+        return 100000000000000000000, 100000000000000000000
 
 
 def set_volumes(tickers, holdings):
@@ -289,7 +289,7 @@ def long_open(ticker, price, target_long, target_long_sl, holding, slack, channe
                 post_message(slack, channel_id, "price", str(price))   
                 post_message(slack, channel_id, "target price", str(target_long))   
                 post_message(slack, channel_id, "Stop Loss Price", str(target_long_sl))   
-                post_message(slack, channel_id, "Budget", str(budget)) 
+                post_message(slack, channel_id, "Budget", str(budget))   
 
                 # 시장가 주문
                 for i in range(0, 20):
@@ -368,11 +368,11 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                 logger.info('order_amount: %s', order_amount)
 
                 # Slack message 전송
-                post_message(slack, channel_id, ticker, "Short Open")
-                post_message(slack, channel_id, "price", str(price))
-                post_message(slack, channel_id, "target price", str(target_short))
-                post_message(slack, channel_id, "Stop Loss Price", str(target_short_sl))
-                post_message(slack, channel_id, "Budget", str(budget))
+                post_message(slack, channel_id, ticker, "Short Open")     
+                post_message(slack, channel_id, "price", str(price))   
+                post_message(slack, channel_id, "target price", str(target_short))   
+                post_message(slack, channel_id, "Stop Loss Price", str(target_short_sl))   
+                post_message(slack, channel_id, "Budget", str(budget))   
 
                 # market price
                 for i in range(0, 20):
@@ -595,6 +595,9 @@ def set_marginType(ticker):
 # 매매 알고리즘 시작
 #---------------------------------------------------------------------------------------------------------------------
 logger.info('---------------------------------------------------------')
+now = datetime.datetime.now()                                            # 현재 시간 조회
+sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
+setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
 
 # 목표가 계산
 close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
@@ -616,11 +619,14 @@ while True:
 
     now = datetime.datetime.now()
 
-    # 매 시간 1분 마다 반복된다
-    if now.minute == 1: 
-        logger.info('New Hour Set Up Start')
+    # 새로운 거래일에 대한 데이터 셋업 (09:01:00 ~ 09:01:20)
+    # 금일, 익일 포함
+    if (sell_time1 < now < sell_time2) or (setup_time1 < now < setup_time2):
+        logger.info('New Date Set Up Start')
 
         close_position(TICKER)                                           # 포지션 정리
+
+        setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
         # 목표가 계산
         close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
@@ -631,14 +637,15 @@ while True:
         logger.info('Short sl Target: %s', target_short_sl)
 
         budget = get_budget()
-        post_message(slack, channel_id, "Budget", str(budget))
+
+        post_message(slack, channel_id, "Budget", str(budget))   
         post_message(slack, channel_id, "Long Target", str(target_long))
         post_message(slack, channel_id, "Long SL Target", str(target_long_sl))
-        post_message(slack, channel_id, "Short Target", str(target_short))
-        post_message(slack, channel_id, "Short SL Target", str(target_short_sl))
+        post_message(slack, channel_id, "Short Target", str(target_short))   
+        post_message(slack, channel_id, "Short SL Target", str(target_short_sl))   
 
-        logger.info('New Hour Set Up End')
-        time.sleep(60)
+        logger.info('New Date Set Up End')
+        time.sleep(20)
 
     price = get_cur_price(TICKER)                                        # 현재가 계산
     logger.info('%s Price: %s', TICKER, price)
