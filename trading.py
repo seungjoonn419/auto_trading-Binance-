@@ -16,7 +16,7 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-BUDGET = 100                                        # 투자 금액(USDT)
+BUDGET = 120                                        # 투자 금액(USDT)
 TICKER = 'BTC/USDT:USDT'
 
 
@@ -638,7 +638,7 @@ while True:
         post_message(slack, channel_id, "Short SL Target", str(target_short_sl))
 
         logger.info('New Hour Set Up End')
-        time.sleep(20)
+        time.sleep(60)
 
     price = get_cur_price(TICKER)                                        # 현재가 계산
     logger.info('%s Price: %s', TICKER, price)
