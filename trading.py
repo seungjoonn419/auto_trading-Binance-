@@ -17,7 +17,11 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 BUDGET = 400                                        # 투자 금액(USDT)
-TICKER = 'BTC/USDT:USDT'
+TICKER = 'SUI/USDT:USDT'
+LEVERAGE = 20
+
+long_opened = False
+short_opened = False
 
 
 # logger instance 생성
@@ -166,8 +170,9 @@ def set_target(ticker):
         target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
 
         # Stop Limitt 0.5%로 지정
-        target_long_sl = target_long * 0.995
-        target_short_sl = target_short * 1.005
+        loss = 0.02
+        target_long_sl = target_long * (1 - loss)
+        target_short_sl = target_short * (1 + loss)
 
         return today_open, target_long, target_short, target_long_sl, target_short_sl
     except Exception as e:
@@ -259,22 +264,23 @@ def create_order_sell_sl(ticker, unit, target_sell_sl):
         return None
 
 
-def long_open(ticker, price, target_long, target_long_sl, holding, slack, channel_id):
+def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
         if holding is False:                                              # 현재 보유하지 않은 상태
             if DEBUG is False:
+                long_opened = True
+
                 # 레버리지 설정
                 market = binance.market(ticker)
-                leverage = 20
                 resp = binance.fapiPrivate_post_leverage({
                     'symbol': market['id'],
-                    'leverage': leverage
+                    'leverage': LEVERAGE
                 })
 
-                order_amount = (BUDGET/price) * leverage                  # 롱 포지션 
+                order_amount = (BUDGET/price) * LEVERAGE                  # 롱 포지션 
                 budget = get_budget()
 
                 logger.info('----------long_open()-----------')
@@ -349,15 +355,16 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
     try:
         if holding is False:                                            # 현재 보유하지 않은 상태
             if DEBUG is False:
+                short_opened = True
+
                 # 레버리지 설정
                 market = binance.market(ticker)
-                leverage = 20
                 resp = binance.fapiPrivate_post_leverage({
                     'symbol': market['id'],
-                    'leverage': leverage
+                    'leverage': LEVERAGE
                 })
                 
-                order_amount = (BUDGET/price) * leverage                # 숏 포지션 
+                order_amount = (BUDGET/price) * LEVERAGE               # 숏 포지션 
                 budget = get_budget()
 
                 logger.info('----------short_open()-----------')
@@ -626,6 +633,9 @@ while True:
 
         close_position(TICKER)                                           # 포지션 정리
 
+        long_opened = False
+        short_opened = False
+
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
         # 목표가 계산
@@ -653,16 +663,22 @@ while True:
     holding = set_holding(TICKER)                                        # 현재 포지션 유무 확인
     logger.info('Is holding: %s', holding)
 
+    logger.info('long_opened: %s', long_opened)
+    logger.info('short_opened: %s', short_opened)
+
     portfolio_long, portfolio_short = get_portfolio(TICKER, price, target_long, target_short)       
     logger.info('portfolio_long: %s', portfolio_long)
     logger.info('portfolio_short: %s', portfolio_short)
 
+
     # 롱 오픈 포지션
-    for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
+    if long_opened == False:
+        for coin in portfolio_long:
+            long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
 
     # 숏 오픈 포지션
-    for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
+    if short_opened == False:
+        for coin in portfolio_short:
+            short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
 
     time.sleep(INTERVAL)
