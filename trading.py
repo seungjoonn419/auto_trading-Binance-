@@ -16,7 +16,6 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-BUDGET = 400                                        # 투자 금액(USDT)
 TICKER = 'SUI/USDT:USDT'
 LEVERAGE = 20
 
@@ -280,8 +279,8 @@ def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_
                     'leverage': LEVERAGE
                 })
 
-                order_amount = (BUDGET/price) * LEVERAGE                  # 롱 포지션 
                 budget = get_budget()
+                order_amount = (BUDGET/price) * LEVERAGE * 0.99           # 롱 포지션 
 
                 logger.info('----------long_open()-----------')
                 logger.info('Ticker: %s', ticker)
@@ -302,6 +301,15 @@ def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_
                     ret = create_order_long(ticker, order_amount/20)
                     logger.info('ret: %s', ret)
                     time.sleep(0.05)
+
+                # 남은 margin을 모두 position open
+                # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
+                budget = set_budget(ticker)                              # 마진 계산
+                order_amount = (budget/price) * leverage * 0.99          # 롱 포지션
+                logger.info('budget(Margin): %s', budget)
+                logger.info('order_amount: %s', order_amount)
+                ret = create_order_long(ticker, order_amount)
+                logger.info('ret: %s', ret)
 
                 # stop loss 주문
                 units = get_balance_unit(TICKER)                          # 잔고 조회
@@ -363,9 +371,9 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                     'symbol': market['id'],
                     'leverage': LEVERAGE
                 })
-                
-                order_amount = (BUDGET/price) * LEVERAGE               # 숏 포지션 
-                budget = get_budget()
+     
+                budget = set_budget(ticker)
+                order_amount = (budget/price) * LEVERAGE * 0.99          # 숏 포지션 
 
                 logger.info('----------short_open()-----------')
                 logger.info('Ticker: %s', ticker)
@@ -386,6 +394,13 @@ def short_open(ticker, price, target_short, target_short_sl, holding, slack, cha
                     ret = create_order_short(ticker, order_amount/20)
                     logger.info('ret: %s', ret)
                     time.sleep(0.05)
+
+                # 남은 margin을 모두 position open
+                # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
+                budget = set_budget(ticker)                             # 마진 계산
+                order_amount = (budget/price) * LEVERAGE * 0.99         # 숏 포지션 
+                ret = create_order_short(ticker, order_amount)
+                logger.info('ret: %s', ret)
 
                 # stop loss
                 units = get_balance_unit(ticker)                        # 잔고 조회
