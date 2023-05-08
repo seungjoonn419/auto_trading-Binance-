@@ -16,11 +16,9 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-TICKER = 'SUI/USDT:USDT'
+TICKER = 'APT/USDT:USDT'
 LEVERAGE = 20
 
-long_opened = False
-short_opened = False
 
 
 # logger instance 생성
@@ -262,6 +260,20 @@ def create_order_sell_sl(ticker, unit, target_sell_sl):
         logger.info('create_order_sell_sl() Exception occur: %s', e)
         return None
 
+def set_budget(ticker):
+    '''
+    투자 금액 계산
+    :return: 원화잔고
+    '''
+    try:
+        balance = binance.fetch_balance(params={"type": "future"})
+        free_balance = balance['USDT']['free']
+
+        return free_balance
+    except Exception as e:
+        logger.error('new_set_budget Exception occur')
+        logger.error(e)
+        return 0
 
 def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id):
     '''
@@ -620,6 +632,9 @@ logger.info('---------------------------------------------------------')
 now = datetime.datetime.now()                                            # 현재 시간 조회
 sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
 setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
+
+long_opened = True
+short_opened = True
 
 # 목표가 계산
 close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
