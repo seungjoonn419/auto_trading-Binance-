@@ -275,7 +275,7 @@ def set_budget(ticker):
         logger.error(e)
         return 0
 
-def long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id):
+def long_open(ticker, price, target_long, target_long_sl, holding, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
