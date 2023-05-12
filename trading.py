@@ -633,8 +633,8 @@ now = datetime.datetime.now()                                            # 현�
 sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
 setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
 
-long_opened = True
-short_opened = True
+long_opened = False
+short_opened = False
 
 # 목표가 계산
 close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
