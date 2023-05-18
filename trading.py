@@ -706,9 +706,4 @@ while True:
         for coin in portfolio_long:
             long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
 
-    # 숏 오픈 포지션
-    if short_opened == False:
-        for coin in portfolio_short:
-            short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
-
     time.sleep(INTERVAL)
