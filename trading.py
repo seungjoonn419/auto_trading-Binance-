@@ -17,7 +17,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 TICKER = 'APT/USDT:USDT'
-LEVERAGE = 10
+LEVERAGE = 20
 
 
 # logger instance 생성
