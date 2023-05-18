@@ -17,8 +17,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 TICKER = 'APT/USDT:USDT'
-LEVERAGE = 20
-
+LEVERAGE = 10
 
 
 # logger instance 생성
@@ -167,7 +166,7 @@ def set_target(ticker):
         target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
 
         # Stop Limitt 0.5%로 지정
-        loss = 0.02
+        loss = 0.005
         target_long_sl = target_long * (1 - loss)
         target_short_sl = target_short * (1 + loss)
 
@@ -705,5 +704,10 @@ while True:
     if long_opened == False:
         for coin in portfolio_long:
             long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
+
+    # 숏 오픈 포지션
+    if short_opened == False:
+        for coin in portfolio_short:
+            short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
 
     time.sleep(INTERVAL)
