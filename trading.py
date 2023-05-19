@@ -274,12 +274,12 @@ def set_budget(ticker):
         logger.error(e)
         return 0
 
-def long_open(ticker, price, target_long, target_long_sl, long_opened, slack, channel_id):
+def long_open(ticker, price, target_long, target_long_sl, holding, long_opened, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
-        if long_opened is False:                                              # 현재 보유하지 않은 상태
+        if holding is False and long_opened is False:                                              # 현재 보유하지 않은 상태
             long_opened = True
 
             # 레버리지 설정
@@ -325,10 +325,17 @@ def long_open(ticker, price, target_long, target_long_sl, long_opened, slack, ch
             units = get_balance_unit(TICKER)                          # 잔고 조회
             unit = units.get(ticker, 0)              
             ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
+            while ret_sl == None:
+                ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
+
             logger.info('ret_sl: %s', ret_sl)
+
+        return long_opened
+
     except Exception as e:
         logger.error('long_open() Exception occur')
         logger.error(e)
+        return long_opened
 
 
 def create_order_short(ticker, order_amount):
@@ -360,12 +367,12 @@ def create_order_buy_sl(ticker, unit, target_buy_sl):
         return None
 
 
-def short_open(ticker, price, target_short, target_short_sl, short_opened, slack, channel_id):
+def short_open(ticker, price, target_short, target_short_sl, holding, short_opened, slack, channel_id):
     '''
     매도 조건 확인 및 매도 시도
     '''
     try:
-        if short_opened is False:
+        if holding is False and short_opened is False :
             short_opened = True
 
             # 레버리지 설정
@@ -409,10 +416,16 @@ def short_open(ticker, price, target_short, target_short_sl, short_opened, slack
             units = get_balance_unit(ticker)                        # 잔고 조회
             unit = units.get(ticker, 0)              
             ret_sl = create_order_buy_sl(ticker, abs(unit), target_short_sl)
+            while ret_sl == None:
+                ret_sl = create_order_buy_sl(ticker, abs(unit), target_short_sl)
             logger.info('ret_sl: %s', ret_sl)
+
+        return short_opened
+
     except Exception as e:
         logger.error('short_open() Exception occur')
         logger.error(e)
+        return short_opened
 
 
 def get_balance_unit(tickers):
@@ -609,6 +622,9 @@ def set_marginType(ticker):
         logger.info('set_marginType() Exception occur')
         logger.info(e)
 
+def test(opened):
+    opened = True
+    return opened
 
 #----------------------------------------------------------------------------------------------------------------------
 # 매매 알고리즘 시작
@@ -685,13 +701,18 @@ while True:
     logger.info('portfolio_long: %s', portfolio_long)
     logger.info('portfolio_short: %s', portfolio_short)
 
-
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_open(coin, price, target_long, target_long_sl, long_opened, slack, channel_id)
+        long_opened = long_open(coin, price, target_long, target_long_sl, holding, long_opened, slack, channel_id)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_open(coin, price, target_short, target_short_sl, short_opened, slack, channel_id)
+        short_opened = short_open(coin, price, target_short, target_short_sl, holding, short_opened, slack, channel_id)
+
+    # 프로그램을 중간에 재기동 시켰을 경우 opened 변수 설정
+    if portfolio_long:
+        long_opened = True
+    if portfolio_short:
+        short_opened = True
 
     time.sleep(INTERVAL)
