@@ -16,7 +16,7 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-TICKER = 'APT/USDT:USDT'
+TICKER = '1000PEPE/USDT:USDT'
 LEVERAGE = 20
 
 
@@ -274,65 +274,58 @@ def set_budget(ticker):
         logger.error(e)
         return 0
 
-def long_open(ticker, price, target_long, target_long_sl, holding, slack, channel_id):
+def long_open(ticker, price, target_long, target_long_sl, long_opened, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
-        if holding is False:                                              # 현재 보유하지 않은 상태
-            if DEBUG is False:
-                long_opened = True
+        if long_opened is False:                                              # 현재 보유하지 않은 상태
+            long_opened = True
 
-                # 레버리지 설정
-                market = binance.market(ticker)
-                resp = binance.fapiPrivate_post_leverage({
-                    'symbol': market['id'],
-                    'leverage': LEVERAGE
-                })
+            # 레버리지 설정
+            market = binance.market(ticker)
+            resp = binance.fapiPrivate_post_leverage({
+                'symbol': market['id'],
+                'leverage': LEVERAGE
+            })
 
-                budget = get_budget()
-                order_amount = (BUDGET/price) * LEVERAGE * 0.99           # 롱 포지션 
+            budget = get_budget()
+            order_amount = (BUDGET/price) * LEVERAGE * 0.99           # 롱 포지션 
 
-                logger.info('----------long_open()-----------')
-                logger.info('Ticker: %s', ticker)
-                logger.info('price: %s', price)
-                logger.info('target_open: %s', target_long)
-                logger.info('target_open_sl: %s', target_long_sl)
-                logger.info('order_amount: %s', order_amount)
+            logger.info('----------long_open()-----------')
+            logger.info('Ticker: %s', ticker)
+            logger.info('price: %s', price)
+            logger.info('target_open: %s', target_long)
+            logger.info('target_open_sl: %s', target_long_sl)
+            logger.info('order_amount: %s', order_amount)
 
-                # Slack message 전송
-                post_message(slack, channel_id, ticker, "Long Open")     
-                post_message(slack, channel_id, "price", str(price))   
-                post_message(slack, channel_id, "target price", str(target_long))   
-                post_message(slack, channel_id, "Stop Loss Price", str(target_long_sl))   
-                post_message(slack, channel_id, "Budget", str(budget))   
+            # Slack message 전송
+            post_message(slack, channel_id, ticker, "Long Open")     
+            post_message(slack, channel_id, "price", str(price))   
+            post_message(slack, channel_id, "target price", str(target_long))   
+            post_message(slack, channel_id, "Stop Loss Price", str(target_long_sl))   
+            post_message(slack, channel_id, "Budget", str(budget))   
 
-                # 시장가 주문
-                for i in range(0, 20):
-                    ret = create_order_long(ticker, order_amount/20)
-                    logger.info('ret: %s', ret)
-                    time.sleep(0.05)
-
-                # 남은 margin을 모두 position open
-                # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
-                budget = set_budget(ticker)                              # 마진 계산
-                order_amount = (budget/price) * leverage * 0.99          # 롱 포지션
-                logger.info('budget(Margin): %s', budget)
-                logger.info('order_amount: %s', order_amount)
-                ret = create_order_long(ticker, order_amount)
+            # 시장가 주문
+            for i in range(0, 20):
+                ret = create_order_long(ticker, order_amount/20)
                 logger.info('ret: %s', ret)
+                time.sleep(0.05)
 
-                # stop loss 주문
-                units = get_balance_unit(TICKER)                          # 잔고 조회
-                unit = units.get(ticker, 0)              
-                ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
-                logger.info('ret_sl: %s', ret_sl)
+            # 남은 margin을 모두 position open
+            # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
+            budget = set_budget(ticker)                              # 마진 계산
+            order_amount = (budget/price) * leverage * 0.99          # 롱 포지션
+            logger.info('budget(Margin): %s', budget)
+            logger.info('order_amount: %s', order_amount)
+            ret = create_order_long(ticker, order_amount)
+            logger.info('ret: %s', ret)
 
-            else:
-                logger.info('BUY API CALLED: %s', ticker)
-
-        else:
-            logger.info('Already have: %s', ticker)
+            # stop loss 주문
+            units = get_balance_unit(TICKER)                          # 잔고 조회
+            unit = units.get(ticker, 0)              
+            ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
+            logger.info('ret_sl: %s', ret_sl)
     except Exception as e:
         logger.error('long_open() Exception occur')
         logger.error(e)
@@ -367,63 +360,56 @@ def create_order_buy_sl(ticker, unit, target_buy_sl):
         return None
 
 
-def short_open(ticker, price, target_short, target_short_sl, holding, slack, channel_id):
+def short_open(ticker, price, target_short, target_short_sl, short_opened, slack, channel_id):
     '''
     매도 조건 확인 및 매도 시도
     '''
     try:
-        if holding is False:                                            # 현재 보유하지 않은 상태
-            if DEBUG is False:
-                short_opened = True
+        if short_opened is False:
+            short_opened = True
 
-                # 레버리지 설정
-                market = binance.market(ticker)
-                resp = binance.fapiPrivate_post_leverage({
-                    'symbol': market['id'],
-                    'leverage': LEVERAGE
-                })
-     
-                budget = set_budget(ticker)
-                order_amount = (budget/price) * LEVERAGE * 0.99          # 숏 포지션 
+            # 레버리지 설정
+            market = binance.market(ticker)
+            resp = binance.fapiPrivate_post_leverage({
+                'symbol': market['id'],
+                'leverage': LEVERAGE
+            })
+ 
+            budget = set_budget(ticker)
+            order_amount = (budget/price) * LEVERAGE * 0.99          # 숏 포지션 
 
-                logger.info('----------short_open()-----------')
-                logger.info('Ticker: %s', ticker)
-                logger.info('price: %s', price)
-                logger.info('target_short: %s', target_short)
-                logger.info('target_short_sl: %s', target_short_sl)
-                logger.info('order_amount: %s', order_amount)
+            logger.info('----------short_open()-----------')
+            logger.info('Ticker: %s', ticker)
+            logger.info('price: %s', price)
+            logger.info('target_short: %s', target_short)
+            logger.info('target_short_sl: %s', target_short_sl)
+            logger.info('order_amount: %s', order_amount)
 
-                # Slack message 전송
-                post_message(slack, channel_id, ticker, "Short Open")     
-                post_message(slack, channel_id, "price", str(price))   
-                post_message(slack, channel_id, "target price", str(target_short))   
-                post_message(slack, channel_id, "Stop Loss Price", str(target_short_sl))   
-                post_message(slack, channel_id, "Budget", str(budget))   
+            # Slack message 전송
+            post_message(slack, channel_id, ticker, "Short Open")     
+            post_message(slack, channel_id, "price", str(price))   
+            post_message(slack, channel_id, "target price", str(target_short))   
+            post_message(slack, channel_id, "Stop Loss Price", str(target_short_sl))   
+            post_message(slack, channel_id, "Budget", str(budget))   
 
-                # market price
-                for i in range(0, 20):
-                    ret = create_order_short(ticker, order_amount/20)
-                    logger.info('ret: %s', ret)
-                    time.sleep(0.05)
-
-                # 남은 margin을 모두 position open
-                # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
-                budget = set_budget(ticker)                             # 마진 계산
-                order_amount = (budget/price) * LEVERAGE * 0.99         # 숏 포지션 
-                ret = create_order_short(ticker, order_amount)
+            # market price
+            for i in range(0, 20):
+                ret = create_order_short(ticker, order_amount/20)
                 logger.info('ret: %s', ret)
+                time.sleep(0.05)
 
-                # stop loss
-                units = get_balance_unit(ticker)                        # 잔고 조회
-                unit = units.get(ticker, 0)              
-                ret_sl = create_order_buy_sl(ticker, abs(unit), target_short_sl)
-                logger.info('ret_sl: %s', ret_sl)
+            # 남은 margin을 모두 position open
+            # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
+            budget = set_budget(ticker)                             # 마진 계산
+            order_amount = (budget/price) * LEVERAGE * 0.99         # 숏 포지션 
+            ret = create_order_short(ticker, order_amount)
+            logger.info('ret: %s', ret)
 
-            else:
-                logger.info('BUY API CALLED: %s', ticker)
-
-        else:
-            logger.info('Already have: %s', ticker)
+            # stop loss
+            units = get_balance_unit(ticker)                        # 잔고 조회
+            unit = units.get(ticker, 0)              
+            ret_sl = create_order_buy_sl(ticker, abs(unit), target_short_sl)
+            logger.info('ret_sl: %s', ret_sl)
     except Exception as e:
         logger.error('short_open() Exception occur')
         logger.error(e)
@@ -701,13 +687,11 @@ while True:
 
 
     # 롱 오픈 포지션
-    if long_opened == False:
-        for coin in portfolio_long:
-            long_open(coin, price, target_long, target_long_sl, holding, slack, channel_id)
+    for coin in portfolio_long:
+        long_open(coin, price, target_long, target_long_sl, long_opened, slack, channel_id)
 
     # 숏 오픈 포지션
-    if short_opened == False:
-        for coin in portfolio_short:
-            short_open(coin, price, target_short, target_short_sl, holding, slack, channel_id)
+    for coin in portfolio_short:
+        short_open(coin, price, target_short, target_short_sl, short_opened, slack, channel_id)
 
     time.sleep(INTERVAL)
