@@ -17,7 +17,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 TICKER = '1000PEPE/USDT:USDT'
-LEVERAGE = 20
+LEVERAGE = 10
 
 
 # logger instance 생성
@@ -165,8 +165,8 @@ def set_target(ticker):
         target_long = today_open + (yesterday_high - yesterday_low) * LARRY_K
         target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
 
-        # Stop Limitt 0.5%로 지정
-        loss = 0.005
+        # Stop Limitt 1%로 지정
+        loss = 0.01
         target_long_sl = target_long * (1 - loss)
         target_short_sl = target_short * (1 + loss)
 
@@ -290,7 +290,7 @@ def long_open(ticker, price, target_long, target_long_sl, holding, long_opened, 
             })
 
             budget = get_budget()
-            order_amount = (BUDGET/price) * LEVERAGE * 0.99           # 롱 포지션 
+            order_amount = (budget/price) * LEVERAGE * 0.99           # 롱 포지션 
 
             logger.info('----------long_open()-----------')
             logger.info('Ticker: %s', ticker)
@@ -315,7 +315,7 @@ def long_open(ticker, price, target_long, target_long_sl, holding, long_opened, 
             # 남은 margin을 모두 position open
             # 현재 남은 budget으로 계산하기 위해 값을 새로 가져온다
             budget = set_budget(ticker)                              # 마진 계산
-            order_amount = (budget/price) * leverage * 0.99          # 롱 포지션
+            order_amount = (budget/price) * LEVERAGE * 0.99          # 롱 포지션
             logger.info('budget(Margin): %s', budget)
             logger.info('order_amount: %s', order_amount)
             ret = create_order_long(ticker, order_amount)
