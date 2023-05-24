@@ -17,7 +17,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 TICKER = '1000PEPE/USDT:USDT'
-LEVERAGE = 10
+LEVERAGE = 5
 
 
 # logger instance 생성
@@ -165,19 +165,23 @@ def set_target(ticker):
         target_long = today_open + (yesterday_high - yesterday_low) * LARRY_K
         target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
 
-        # Stop Limitt 1%로 지정
-        loss = 0.01
+        # Stop Limit 2%로 지정
+        loss = 0.02
         target_long_sl = target_long * (1 - loss)
         target_short_sl = target_short * (1 + loss)
 
-        return today_open, target_long, target_short, target_long_sl, target_short_sl
+        # Take Profit 2%로 지정
+        profit = 0.02
+        target_long_tp = target_long * (1 + profit)
+        target_short_tp = target_short * (1 - profit)
+
+        return today_open, target_long, target_short, target_long_sl, target_short_sl, target_long_tp, target_short_tp
     except Exception as e:
         logger.error('cal_target Exception occur')
         logger.error('ticker: %s', ticker)
         logger.error(e)
 
-        # 절대 매수를 하지 못 하도록 높은 값을 설정
-        return 100000000000000000000, 100000000000000000000
+        return float("inf"), float("inf"), float("-inf"), float("-inf"), float("inf"), float("inf"), float("-inf")
 
 
 def set_volumes(tickers, holdings):
@@ -259,6 +263,20 @@ def create_order_sell_sl(ticker, unit, target_sell_sl):
         logger.info('create_order_sell_sl() Exception occur: %s', e)
         return None
 
+def create_order_sell_tp(ticker, unit, target_sell_tp):
+    try:
+        ret_sl = binance.create_order(
+            symbol=ticker,
+            type="TAKE_PROFIT_MARKET",
+            side="sell",
+            amount=unit,
+            params={'stopPrice': target_sell_tp}
+        )
+        return ret_sl
+    except Exception as e:
+        logger.info('create_order_sell_tp() Exception occur: %s', e)
+        return None
+
 def set_budget(ticker):
     '''
     투자 금액 계산
@@ -274,7 +292,7 @@ def set_budget(ticker):
         logger.error(e)
         return 0
 
-def long_open(ticker, price, target_long, target_long_sl, holding, long_opened, slack, channel_id):
+def long_open(ticker, price, target_long, target_long_sl, target_long_tp, holding, long_opened, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
@@ -304,6 +322,7 @@ def long_open(ticker, price, target_long, target_long_sl, holding, long_opened, 
             post_message(slack, channel_id, "price", str(price))   
             post_message(slack, channel_id, "target price", str(target_long))   
             post_message(slack, channel_id, "Stop Loss Price", str(target_long_sl))   
+            post_message(slack, channel_id, "Take Profit Price", str(target_long_tp))   
             post_message(slack, channel_id, "Budget", str(budget))   
 
             # 시장가 주문
@@ -321,14 +340,21 @@ def long_open(ticker, price, target_long, target_long_sl, holding, long_opened, 
             ret = create_order_long(ticker, order_amount)
             logger.info('ret: %s', ret)
 
-            # stop loss 주문
             units = get_balance_unit(TICKER)                          # 잔고 조회
             unit = units.get(ticker, 0)              
+
+            # Stop Loss 주문
             ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
             while ret_sl == None:
                 ret_sl = create_order_sell_sl(ticker, unit, target_long_sl)
 
+            # Take Profit 주문
+            ret_tp = create_order_sell_tp(ticker, unit, target_long_tp)
+            while ret_tp == None:
+                ret_tp = create_order_sell_tp(ticker, unit, target_long_tp)
+
             logger.info('ret_sl: %s', ret_sl)
+            logger.info('ret_tp: %s', ret_tp)
 
         return long_opened
 
@@ -367,7 +393,22 @@ def create_order_buy_sl(ticker, unit, target_buy_sl):
         return None
 
 
-def short_open(ticker, price, target_short, target_short_sl, holding, short_opened, slack, channel_id):
+def create_order_buy_tp(ticker, unit, target_buy_tp):
+    try:
+        ret_sl = binance.create_order(
+            symbol=ticker,
+            type="TAKE_PROFIT_MARKET",
+            side="buy",
+            amount=unit,
+            params={'stopPrice': target_buy_tp}
+        )
+        return ret_sl
+    except Exception as e:
+        logger.info('create_order_buy_tp() Exception occur: %s', e)
+        return None
+
+
+def short_open(ticker, price, target_short, target_short_sl, target_short_tp, holding, short_opened, slack, channel_id):
     '''
     매도 조건 확인 및 매도 시도
     '''
@@ -397,6 +438,7 @@ def short_open(ticker, price, target_short, target_short_sl, holding, short_open
             post_message(slack, channel_id, "price", str(price))   
             post_message(slack, channel_id, "target price", str(target_short))   
             post_message(slack, channel_id, "Stop Loss Price", str(target_short_sl))   
+            post_message(slack, channel_id, "Take Profit Price", str(target_short_tp))   
             post_message(slack, channel_id, "Budget", str(budget))   
 
             # market price
@@ -412,13 +454,21 @@ def short_open(ticker, price, target_short, target_short_sl, holding, short_open
             ret = create_order_short(ticker, order_amount)
             logger.info('ret: %s', ret)
 
-            # stop loss
             units = get_balance_unit(ticker)                        # 잔고 조회
             unit = units.get(ticker, 0)              
+
+            # Stop Loss
             ret_sl = create_order_buy_sl(ticker, abs(unit), target_short_sl)
             while ret_sl == None:
                 ret_sl = create_order_buy_sl(ticker, abs(unit), target_short_sl)
+
+            # Take Profit
+            ret_tp = create_order_buy_tp(ticker, abs(unit), target_short_tp)
+            while ret_tp == None:
+                ret_tp = create_order_buy_tp(ticker, abs(unit), target_short_tp)
+
             logger.info('ret_sl: %s', ret_sl)
+            logger.info('ret_tp: %s', ret_tp)
 
         return short_opened
 
@@ -638,11 +688,13 @@ long_opened = False
 short_opened = False
 
 # 목표가 계산
-close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
+close, target_long, target_short, target_long_sl, target_short_sl, target_long_tp, target_short_tp = set_target(TICKER)
 logger.info('Long Target: %s', target_long)
 logger.info('Long sl Target: %s', target_long_sl)
+logger.info('Long tp Target: %s', target_long_tp)
 logger.info('Short Target: %s', target_short)
 logger.info('Short sl Target: %s', target_short_sl)
+logger.info('Short tp Target: %s', target_short_tp)
 
 budget = get_budget()
 
@@ -650,8 +702,10 @@ slack, channel_id = slack_init()
 post_message(slack, channel_id, "Budget", str(budget))   
 post_message(slack, channel_id, "Long Target", str(target_long))
 post_message(slack, channel_id, "Long SL Target", str(target_long_sl))
+post_message(slack, channel_id, "Long TP Target", str(target_long_tp))
 post_message(slack, channel_id, "Short Target", str(target_short))   
 post_message(slack, channel_id, "Short SL Target", str(target_short_sl))   
+post_message(slack, channel_id, "Short TP Target", str(target_short_tp))   
 
 while True:
 
@@ -670,20 +724,24 @@ while True:
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
         # 목표가 계산
-        close, target_long, target_short, target_long_sl, target_short_sl = set_target(TICKER)
+        close, target_long, target_short, target_long_sl, target_short_sl, target_long_tp, target_short_tp = set_target(TICKER)
 
         logger.info('Long Target: %s', target_long)
         logger.info('Long sl Target: %s', target_long_sl)
+        logger.info('Long tp Target: %s', target_long_tp)
         logger.info('Short Target: %s', target_short)
         logger.info('Short sl Target: %s', target_short_sl)
+        logger.info('Short tp Target: %s', target_short_tp)
 
         budget = get_budget()
 
         post_message(slack, channel_id, "Budget", str(budget))   
         post_message(slack, channel_id, "Long Target", str(target_long))
         post_message(slack, channel_id, "Long SL Target", str(target_long_sl))
+        post_message(slack, channel_id, "Long TP Target", str(target_long_tp))
         post_message(slack, channel_id, "Short Target", str(target_short))   
         post_message(slack, channel_id, "Short SL Target", str(target_short_sl))   
+        post_message(slack, channel_id, "Short TP Target", str(target_short_tp))   
 
         logger.info('New Date Set Up End')
         time.sleep(20)
@@ -703,11 +761,11 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_opened = long_open(coin, price, target_long, target_long_sl, holding, long_opened, slack, channel_id)
+        long_opened = long_open(coin, price, target_long, target_long_sl, target_long_tp, holding, long_opened, slack, channel_id)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_opened = short_open(coin, price, target_short, target_short_sl, holding, short_opened, slack, channel_id)
+        short_opened = short_open(coin, price, target_short, target_short_sl, target_short_tp, holding, short_opened, slack, channel_id)
 
     # 프로그램을 중간에 재기동 시켰을 경우 opened 변수 설정
     if portfolio_long:
