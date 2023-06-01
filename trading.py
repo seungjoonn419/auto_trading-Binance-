@@ -17,7 +17,7 @@ DEBUG = False                                       # True: 매매 API 호출 �
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 TICKER = 'BTC/USDT:USDT'
-LEVERAGE = 1
+LEVERAGE = 4
 
 
 # logger instance 생성
@@ -647,6 +647,8 @@ logger.info('Short Target: %s', target_short)
 budget = get_budget()
 
 slack, channel_id = slack_init()
+
+post_message(slack, channel_id, "Ticker", str(TICKER))   
 post_message(slack, channel_id, "Budget", str(budget))   
 post_message(slack, channel_id, "Long Target", str(target_long))
 post_message(slack, channel_id, "Short Target", str(target_short))   
@@ -675,6 +677,7 @@ while True:
 
         budget = get_budget()
 
+        post_message(slack, channel_id, "Ticker", str(TICKER))   
         post_message(slack, channel_id, "Budget", str(budget))   
         post_message(slack, channel_id, "Long Target", str(target_long))
         post_message(slack, channel_id, "Short Target", str(target_short))   
