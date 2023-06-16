@@ -16,7 +16,7 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-TICKER = 'BTC/USDT:USDT'
+TICKER = 'LINA/USDT:USDT'
 LEVERAGE = 4
 
 
@@ -174,32 +174,6 @@ def set_target(ticker):
         return float("inf"), float("inf"), float("-inf")
 
 
-def set_volumes(tickers, holdings):
-    '''
-    코인들에 대한 24시간 동안 거래대금
-    현재 보유 중인 포지션에 대해서는 거래대금을 0으로 한다
-    '''
-    volumes = {}
-    each_volume = {}
-    total_volume = 0
-
-    quote_tickers = binance.fetch_tickers()
-
-    for ticker in tickers:
-
-        if holdings[ticker] == False:                       # 보유
-            volume = quote_tickers[ticker]['quoteVolume']
-            volumes[ticker] = volume
-            total_volume += volume
-        else:                                               # 보유하지 않음
-            volumes[ticker] = 0
-
-    for ticker in tickers:
-        each_volume[ticker] = volumes[ticker]/total_volume
-
-    return volumes, total_volume, each_volume
-
-
 def get_portfolio(ticker, price, target_long, target_short):
     '''
     매수 조건 확인 및 매수 시도
@@ -282,12 +256,12 @@ def set_budget(ticker):
         logger.error(e)
         return 0
 
-def long_open(ticker, price, target_long, holding, long_opened, slack, channel_id):
+def long_open(ticker, price, target_long, long_opened, slack, channel_id):
     '''
     매수 조건 확인 및 매수 시도
     '''
     try:
-        if holding is False and long_opened is False:                                              # 현재 보유하지 않은 상태
+        if long_opened is False:                                              # 현재 보유하지 않은 상태
             long_opened = True
 
             # 레버리지 설정
@@ -379,12 +353,12 @@ def create_order_buy_tp(ticker, unit, target_buy_tp):
         return None
 
 
-def short_open(ticker, price, target_short, holding, short_opened, slack, channel_id):
+def short_open(ticker, price, target_short, short_opened, slack, channel_id):
     '''
     매도 조건 확인 및 매도 시도
     '''
     try:
-        if holding is False and short_opened is False :
+        if short_opened is False :
             short_opened = True
 
             # 레버리지 설정
@@ -490,10 +464,9 @@ def close_position(ticker):
                         amount=unit
                     )
                     logger.info(ret)
-
-
             else:
                 logger.info('Long position close(): %s', ticker)
+
         # 숏 포지션 정리
         elif unit < 0:
             if DEBUG is False:
@@ -515,7 +488,6 @@ def close_position(ticker):
                         amount=unit
                     )
                     logger.info(ret)
-
             else:
                 logger.info('Short position close(): %s', ticker)
 
@@ -543,26 +515,6 @@ def get_budget():
         logger.error('new_set_budget Exception occur')
         logger.error(e)
         return 0
-
-
-def set_holding(ticker):
-    '''
-    현재 보유 중인 종목
-    :return: 보유 종목 리스트
-    '''
-    try:
-        units = get_balance_unit(ticker)                   # 잔고 조회
-        holding = False        
-
-        unit = units.get(ticker, 0)                     # 보유 수량
-
-        if unit != 0:
-            holding = True
-
-        return holding
-    except Exception as e:
-        logger.error('set_holdings() Exception error')
-        logger.error(e)
 
 
 def print_status(portfolio, prices, targets, closes):
@@ -688,9 +640,6 @@ while True:
     price = get_cur_price(TICKER)                                        # 현재가 계산
     logger.info('%s Price: %s', TICKER, price)
 
-    holding = set_holding(TICKER)                                        # 현재 포지션 유무 확인
-    logger.info('Is holding: %s', holding)
-
     logger.info('long_opened: %s', long_opened)
     logger.info('short_opened: %s', short_opened)
 
@@ -700,11 +649,11 @@ while True:
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
-        long_opened = long_open(coin, price, target_long, holding, long_opened, slack, channel_id)
+        long_opened = long_open(coin, price, target_long, long_opened, slack, channel_id)
 
     # 숏 오픈 포지션
     for coin in portfolio_short:
-        short_opened = short_open(coin, price, target_short, holding, short_opened, slack, channel_id)
+        short_opened = short_open(coin, price, target_short, short_opened, slack, channel_id)
 
     # 프로그램을 중간에 재기동 시켰을 경우 opened 변수 설정
     if portfolio_long:
