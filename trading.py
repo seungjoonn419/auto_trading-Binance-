@@ -14,10 +14,9 @@ import slack_bot
 # 1,200 request weight per minute
 INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
-COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
+COIN_NUM = 3                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 LEVERAGE = 4
-OPEN_INIT = False, False
 
 
 # logger instance 생성
@@ -291,7 +290,7 @@ def set_margin(holdings):
 
         logger.info('free: %s', free)
         logger.info('holded: %s', holded)
-        return free / (5 - holded)
+        return free / (COIN_NUM - holded)
     except Exception as e:
         logger.error('set_margin Exception occur: %s', e)
         return 0
@@ -639,8 +638,8 @@ def get_quoteVolume():
 
         volume_list.sort(key=lambda x: x[1], reverse=True)
 
-        top_5_volume_list = volume_list[:5]
-        tickers = [item[0] for item in top_5_volume_list]
+        top_volume_list = volume_list[:COIN_NUM]
+        tickers = [item[0] for item in top_volume_list]
 
         logger.info('get_quoteVolume tickers: %s', tickers)
 
