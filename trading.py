@@ -16,8 +16,9 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 1                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-TICKER = 'LINA/USDT:USDT'
+TICKER = '1INCH/USDT:USDT'
 LEVERAGE = 4
+OPEN_INIT = False, False
 
 
 # logger instance 생성
@@ -588,8 +589,7 @@ now = datetime.datetime.now()                                            # 현�
 sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
 setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
 
-long_opened = False
-short_opened = False
+long_opened, short_opened = OPEN_INIT
 
 # 목표가 계산
 close, target_long, target_short = set_target(TICKER)
