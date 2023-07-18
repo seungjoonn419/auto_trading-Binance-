@@ -14,7 +14,7 @@ import slack_bot
 # 1,200 request weight per minute
 INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
-COIN_NUM = 3                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
+COIN_NUM = 10                                       # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 LEVERAGE = 4
 
@@ -640,14 +640,12 @@ def get_quoteVolume(slack, channel_id):
         response = requests.get(url)
         data = response.json()
 
-        excluded_tickers = ['BTCUSDT', 'ETHUSDT', 'XRPUSDT']
-
         volume_list = []
 
         for item in data:
             symbol = item['symbol']
             volume = float(item['quoteVolume'])
-            if symbol.endswith('USDT') and symbol not in excluded_tickers:
+            if symbol.endswith('USDT'):
                 volume_list.append((symbol, volume))
 
         volume_list.sort(key=lambda x: x[1], reverse=True)
