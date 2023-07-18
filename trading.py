@@ -469,6 +469,7 @@ def close_position(tickers):
             if unit > 0:
                 if DEBUG is False:
                     logger.info('----------close long position ret-----------')
+                    '''
                     # 20번에 나누어서 시장가로 포지션을 Close
                     for i in range(0,20):
                         ret = binance.create_market_sell_order(
@@ -477,7 +478,12 @@ def close_position(tickers):
                         )
                         logger.info(ret)
                         time.sleep(0.05)
-
+                    '''
+                    ret = binance.create_market_sell_order(
+                        symbol=ticker,
+                        amount=unit
+                    )
+                    logger.info(ret)
 
                     # 남은 포지션을 추가로 확인하여 포지션을 Close
                     units = get_balance_unit()
@@ -490,10 +496,12 @@ def close_position(tickers):
                         logger.info(ret)
                 else:
                     logger.info('Long position close(): %s', ticker)
+
             # 숏 포지션 정리
             elif unit < 0:
                 if DEBUG is False:
                     logger.info('----------close short position ret-----------')
+                    '''
                     for i in range(0,20):
                         ret = binance.create_market_buy_order(
                             symbol=ticker,
@@ -501,6 +509,12 @@ def close_position(tickers):
                         )
                         logger.info(ret)
                         time.sleep(0.05)
+                    '''
+                    ret = binance.create_market_buy_order(
+                        symbol=ticker,
+                        amount=-unit
+                    )
+                    logger.info(ret)
 
                     # 남은 포지션을 추가로 확인하여 포지션을 Close
                     units = get_balance_unit()
@@ -616,7 +630,7 @@ def set_marginType(ticker):
     except Exception as e:
         logger.info('set_marginType() Exception occur :%s', e)
 
-def get_quoteVolume():
+def get_quoteVolume(slack, channel_id):
     '''
     24시간의 거래대금 순위
     '''
@@ -641,9 +655,11 @@ def get_quoteVolume():
         top_volume_list = volume_list[:COIN_NUM]
         tickers = [item[0] for item in top_volume_list]
 
-        logger.info('get_quoteVolume tickers: %s', tickers)
+        # Slack message 전송
+        post_message(slack, channel_id, "Tickers", str(tickers))   
 
         return tickers
+
     except Exception as e:
         logger.info('get_quoteVolume() Exception occur: %s', e)
         return []
@@ -657,7 +673,9 @@ now = datetime.datetime.now()                                            # 현�
 sell_time1, sell_time2 = make_sell_times(now)                            # 초기 매도 시간 설정
 setup_time1, setup_time2 = make_setup_times(now)                         # 초기 셋업 시간 설정
 
-tickers = get_quoteVolume()
+slack, channel_id = slack_init()
+
+tickers = get_quoteVolume(slack, channel_id)
 
 # 목표가 계산
 close, target_long, target_short = set_target(tickers)
@@ -666,7 +684,6 @@ logger.info('Short Target: %s', target_short)
 
 budget = get_budget()
 
-slack, channel_id = slack_init()
 
 while True:
 
@@ -677,11 +694,11 @@ while True:
     if (sell_time1 < now < sell_time2) or (setup_time1 < now < setup_time2):
         logger.info('New Date Set Up Start')
 
-        close_position()                                                 # 포지션 정리
+        close_position(tickers)                                          # 포지션 정리
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
 
-        tickers = get_quoteVolume()
+        tickers = get_quoteVolume(slack, channel_id)
 
         # 목표가 계산
         close, target_long, target_short = set_target(tickers)
