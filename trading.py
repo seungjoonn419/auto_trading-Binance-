@@ -16,7 +16,7 @@ INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
 COIN_NUM = 10                                       # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
-LEVERAGE = 4
+LEVERAGE = 10
 
 
 # logger instance 생성
@@ -138,7 +138,7 @@ def get_df(ticker):
             symbol=ticker, 
             timeframe='1d', 
             since=None, 
-            limit=10)
+            limit=20)
 
         df = pd.DataFrame(btc, columns=['datetime', 'open', 'high', 'low', 'close', 'volume'])
         df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
@@ -156,12 +156,21 @@ def cal_target(ticker):
     try:
         df = get_df(ticker)
 
+        df['noise'] = 1 - abs(df['open'] - df['close']) / (df['high'] - df['low'])
+        df['noise_ma20'] = df['noise'].rolling(window=20, min_periods=1).mean()
+        logger.info('Ticker: %s, noise_ma20: %s', ticker, df['noise_ma20'])
+
         yesterday = df.iloc[-2]
         today_open = yesterday['close']
+        yesterday_open = yesterday['open']
+        yesterday_close = yesterday['close']
         yesterday_high = yesterday['high']
         yesterday_low = yesterday['low']
-        target_long = today_open + (yesterday_high - yesterday_low) * LARRY_K
-        target_short = today_open - (yesterday_high - yesterday_low) * LARRY_K
+        yesterday_noise_ma20 = yesterday['noise_ma20']
+        logger.info('yesterday_noise_ma20: %s', yesterday_noise_ma20)
+
+        target_long = today_open + (yesterday_high - yesterday_low) * yesterday_noise_ma20
+        target_short = today_open - (yesterday_high - yesterday_low) * yesterday_noise_ma20
 
         return today_open, target_long, target_short
     except Exception as e:
@@ -711,6 +720,7 @@ while True:
     logger.info('Price: %s', price)
 
     holdings = set_holdings(tickers)                                     # 현재 포지션 유무 확인
+    logger.info('Holdings: %s', holdings)
 
     margin = set_margin(holdings)                                        # 마진 계산
 
