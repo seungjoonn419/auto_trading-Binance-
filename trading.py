@@ -14,7 +14,7 @@ import slack_bot
 # 1,200 request weight per minute
 INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
-COIN_NUM = 10                                       # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
+COIN_NUM = 8                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
 LARRY_K = 0.5
 LEVERAGE = 10
 
@@ -158,7 +158,6 @@ def cal_target(ticker):
 
         df['noise'] = 1 - abs(df['open'] - df['close']) / (df['high'] - df['low'])
         df['noise_ma20'] = df['noise'].rolling(window=20, min_periods=1).mean()
-        logger.info('Ticker: %s, noise_ma20: %s', ticker, df['noise_ma20'])
 
         yesterday = df.iloc[-2]
         today_open = yesterday['close']
@@ -167,7 +166,6 @@ def cal_target(ticker):
         yesterday_high = yesterday['high']
         yesterday_low = yesterday['low']
         yesterday_noise_ma20 = yesterday['noise_ma20']
-        logger.info('yesterday_noise_ma20: %s', yesterday_noise_ma20)
 
         target_long = today_open + (yesterday_high - yesterday_low) * yesterday_noise_ma20
         target_short = today_open - (yesterday_high - yesterday_low) * yesterday_noise_ma20
@@ -682,7 +680,7 @@ setup_time1, setup_time2 = make_setup_times(now)                         # 초�
 
 slack, channel_id = slack_init()
 
-tickers = get_quoteVolume(slack, channel_id)
+tickers = ['BTCUSDT', 'ETHUSDT', 'XRPUSDT', 'DOGEUSDT', 'SANDUSDT', 'MANAUSDT', 'APTUSDT', 'GMTUSDT']
 
 # 목표가 계산
 close, target_long, target_short = set_target(tickers)
@@ -704,8 +702,6 @@ while True:
         close_position(tickers)                                          # 포지션 정리
 
         setup_time1, setup_time2 = make_setup_times(now)                 # 다음 거래일 셋업 시간 갱신
-
-        tickers = get_quoteVolume(slack, channel_id)
 
         # 목표가 계산
         close, target_long, target_short = set_target(tickers)
