@@ -14,9 +14,8 @@ import slack_bot
 # 1,200 request weight per minute
 INTERVAL = 0.15                                     # API 호출 간격
 DEBUG = False                                       # True: 매매 API 호출 안됨, False: 실제로 매매 API 호출
-COIN_NUM = 8                                        # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
-LARRY_K = 0.5
-LEVERAGE = 10
+COIN_NUM = 13                                       # 분산 투자 코인 개수 (자산/COIN_NUM를 각 코인에 투자)
+LEVERAGE = 5
 
 
 # logger instance 생성
@@ -680,12 +679,15 @@ setup_time1, setup_time2 = make_setup_times(now)                         # 초�
 
 slack, channel_id = slack_init()
 
-tickers = ['BTCUSDT', 'ETHUSDT', 'XRPUSDT', 'DOGEUSDT', 'SANDUSDT', 'MANAUSDT', 'APTUSDT', 'GMTUSDT']
+tickers = ['BTCUSDT', 'BCHUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'XLMUSDT', 'DOGEUSDT', 'SANDUSDT', 'MANAUSDT', 'APTUSDT', 'SUIUSDT', 'GMTUSDT', 'AXSUSDT']
 
 # 목표가 계산
 close, target_long, target_short = set_target(tickers)
 logger.info('Long Target: %s', target_long)
 logger.info('Short Target: %s', target_short)
+
+post_message(slack, channel_id, "Long Target", str(target_long))   
+post_message(slack, channel_id, "Short Target", str(target_short))   
 
 budget = get_budget()
 
@@ -709,6 +711,9 @@ while True:
         logger.info('Long Target: %s', target_long)
         logger.info('Short Target: %s', target_short)
 
+        post_message(slack, channel_id, "Long Target", str(target_long))   
+        post_message(slack, channel_id, "Short Target", str(target_short))   
+
         logger.info('New Date Set Up End')
         time.sleep(20)
 
@@ -722,14 +727,9 @@ while True:
 
     portfolio_long, portfolio_short = get_portfolio(tickers, price, target_long, target_short)       
     logger.info('portfolio_long: %s', portfolio_long)
-    logger.info('portfolio_short: %s', portfolio_short)
 
     # 롱 오픈 포지션
     for coin in portfolio_long:
         long_open(coin, price[coin], target_long[coin], holdings[coin], margin, slack, channel_id)
-
-    # 숏 오픈 포지션
-    for coin in portfolio_short:
-        short_open(coin, price[coin], target_short[coin], holdings[coin], margin, slack, channel_id)
 
     time.sleep(INTERVAL)
